@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(OpenGLPBR CXX)
+project(OpenGLPBR LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -48,5 +48,5 @@ source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCES} ${HEADERS})
 
 target_link_libraries(OpenGLPBR PRIVATE glfw glm::glm imgui glad legacy_stdio_definitions pdh)
 
-# Set the working directory for the debugger to the source directory (CMAKE_SOURCE_DIR = E:\repo\Weather System)
+# Set the working directory for the debugger to the source directory (CMAKE_SOURCE_DIR = E:\repo\OpenGL-PBR)
 set_target_properties(OpenGLPBR PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

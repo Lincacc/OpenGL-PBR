@@ -1,5 +1,6 @@
 #include "core/core.h"
 #include "core/actor.h"
+#include "core/ground.h"
 #include "core/light.h"
 #include "core/shaders/shader_code_0.h"
 #include "core/materials/material_0.h"
@@ -115,6 +116,18 @@ int main() {
     actor.material.matParams.b = 0;
     actor.init();
 
+    glm::vec3 bmin(1e9f), bmax(-1e9f);
+    for (const auto& pos : actor.mesh.positions) {
+        bmin = glm::min(bmin, pos);
+        bmax = glm::max(bmax, pos);
+    }
+    const float floorY = bmin.y - 0.002f;
+    const glm::vec2 aoCenter = (glm::vec2(bmin.x, bmin.z) + glm::vec2(bmax.x, bmax.z)) * 0.5f;
+    const float aoRadius = 0.55f * glm::length(glm::vec2(bmax.x - bmin.x, bmax.z - bmin.z));
+
+    Ground ground;
+    ground.init(floorY, 4.f);
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
@@ -129,6 +142,8 @@ int main() {
         glViewport(0, 0, width, height);
         glClearColor(ambientColor.r, ambientColor.g, ambientColor.b, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        ground.draw(v, p, ambientColor, aoCenter, aoRadius);
 
         actor.shader.bind();
         actor.shader.setMatrix4("viewMatrix", v);

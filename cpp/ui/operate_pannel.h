@@ -42,6 +42,13 @@ inline void draw_sun_icon(ImDrawList* dl, ImVec2 c, float r, ImU32 col) {
     }
 }
 
+inline ImU32 color_u32(const glm::vec3& c, int a) {
+    auto u8 = [](float x) {
+        return int(std::clamp(x, 0.f, 1.f) * 255.f + 0.5f);
+        };
+    return IM_COL32(u8(c.x), u8(c.y), u8(c.z), a);
+}
+
 inline ImVec2 project_sphere(const glm::vec3& p, ImVec2 center, float R,
     const glm::vec3& right, const glm::vec3& up)
 {
@@ -51,22 +58,18 @@ inline ImVec2 project_sphere(const glm::vec3& p, ImVec2 center, float R,
 
 inline void draw_great_circle(ImDrawList* dl, ImVec2 center, float R,
     const glm::vec3& axis_a, const glm::vec3& axis_b,
-    const glm::vec3& eye, const glm::vec3& right, const glm::vec3& up,
-    ImU32 front_col, ImU32 back_col, float thickness)
+    const glm::vec3& right, const glm::vec3& up,
+    ImU32 col, float thickness)
 {
     ImVec2 prev{};
-    glm::vec3 prev_p{};
     bool has_prev = false;
     for (int i = 0; i <= 96; ++i) {
         const float t = float(i) / 96.f * glm::two_pi<float>();
         const glm::vec3 p = axis_a * std::cos(t) + axis_b * std::sin(t);
         const ImVec2 q = project_sphere(p, center, R, right, up);
-        if (has_prev) {
-            const bool front = glm::dot(p, eye) >= 0.f || glm::dot(prev_p, eye) >= 0.f;
-            dl->AddLine(prev, q, front ? front_col : back_col, thickness);
-        }
+        if (has_prev)
+            dl->AddLine(prev, q, col, thickness);
         prev = q;
-        prev_p = p;
         has_prev = true;
     }
 }
@@ -85,22 +88,20 @@ inline float dist_point_seg(ImVec2 p, ImVec2 a, ImVec2 b) {
     return std::sqrt(dx * dx + dy * dy);
 }
 
-inline float dist_to_circle_front(ImVec2 mouse, ImVec2 center, float R,
+inline float dist_to_circle(ImVec2 mouse, ImVec2 center, float R,
     const glm::vec3& axis_a, const glm::vec3& axis_b,
-    const glm::vec3& eye, const glm::vec3& right, const glm::vec3& up)
+    const glm::vec3& right, const glm::vec3& up)
 {
     float best = 1e9f;
     ImVec2 prev{};
-    glm::vec3 prev_p{};
     bool has_prev = false;
     for (int i = 0; i <= 96; ++i) {
         const float t = float(i) / 96.f * glm::two_pi<float>();
         const glm::vec3 p = axis_a * std::cos(t) + axis_b * std::sin(t);
         const ImVec2 q = project_sphere(p, center, R, right, up);
-        if (has_prev && (glm::dot(p, eye) >= 0.f || glm::dot(prev_p, eye) >= 0.f))
+        if (has_prev)
             best = std::min(best, dist_point_seg(mouse, prev, q));
         prev = q;
-        prev_p = p;
         has_prev = true;
     }
     return best;
@@ -117,7 +118,7 @@ inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float 
     ImGui::InvisibleButton("sphere", ImVec2(box, box));
     const ImVec2 center(cursor.x + box * 0.5f, cursor.y + box * 0.5f);
 
-    const glm::vec3 eye = glm::normalize(glm::vec3(0.55f, 0.42f, 1.f));
+    const glm::vec3 eye = glm::normalize(glm::vec3(-0.55f, 0.42f, 1.f));
     glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.f, 1.f, 0.f), eye));
     glm::vec3 up = glm::normalize(glm::cross(eye, right));
 
@@ -133,21 +134,19 @@ inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float 
     const float md_y = mouse.y - center.y;
     const bool on_core = (md_x * md_x + md_y * md_y) <= core_r * core_r;
 
-    const float dist_x = dist_to_circle_front(mouse, center, radius, x_a, x_b, eye, right, up);
-    const float dist_y = dist_to_circle_front(mouse, center, radius, y_a, y_b, eye, right, up);
+    const float dist_x = dist_to_circle(mouse, center, radius, x_a, x_b, right, up);
+    const float dist_y = dist_to_circle(mouse, center, radius, y_a, y_b, right, up);
     const float pick_px = 8.f;
     int hover_ring = -1;
-    if (!on_core) {
-        if (dist_x < pick_px || dist_y < pick_px)
-            hover_ring = (dist_x < dist_y) ? 0 : 1;
-    }
+    if (dist_x < pick_px || dist_y < pick_px)
+        hover_ring = (dist_x < dist_y) ? 0 : 1;
 
     static int drag_ring = -1;
     if (ImGui::IsItemActivated()) {
-        if (on_core)
-            ImGui::OpenPopup("light_color");
-        else
+        if (hover_ring >= 0)
             drag_ring = hover_ring;
+        else if (on_core)
+            ImGui::OpenPopup("light_color");
     }
     if (!ImGui::IsItemActive())
         drag_ring = -1;
@@ -162,23 +161,26 @@ inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float 
     }
 
     const int lit_ring = drag_ring >= 0 ? drag_ring : hover_ring;
-    const ImU32 front = IM_COL32(47, 128, 237, 255);
-    const ImU32 back = IM_COL32(47, 128, 237, 70);
-    const ImU32 front_hi = IM_COL32(110, 198, 255, 255);
-    const ImU32 back_hi = IM_COL32(110, 198, 255, 140);
+    const glm::vec3 col = glm::clamp(light.color, 0.f, 1.f);
+    const ImU32 ball = color_u32(col, 255);
+    const ImU32 ring_idle = IM_COL32(70, 150, 255, 255);
+    const ImU32 ring_hot = IM_COL32(255, 210, 40, 255);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddCircleFilled(center, core_r, IM_COL32(196, 196, 196, 255), 32);
+    dl->AddCircleFilled(center, core_r, ball, 32);
+    dl->AddCircle(center, core_r, IM_COL32(255, 255, 255, 80), 32, 1.2f);
 
     const bool hi_y = lit_ring == 1;
     const bool hi_x = lit_ring == 0;
-    draw_great_circle(dl, center, radius, y_a, y_b, eye, right, up,
-        hi_y ? front_hi : front, hi_y ? back_hi : back, hi_y ? 3.2f : 2.f);
-    draw_great_circle(dl, center, radius, x_a, x_b, eye, right, up,
-        hi_x ? front_hi : front, hi_x ? back_hi : back, hi_x ? 3.2f : 2.f);
+    const ImU32 col_y = hi_y ? ring_hot : ring_idle;
+    const ImU32 col_x = hi_x ? ring_hot : ring_idle;
+    draw_great_circle(dl, center, radius, y_a, y_b, right, up,
+        col_y, hi_y ? 3.2f : 2.f);
+    draw_great_circle(dl, center, radius, x_a, x_b, right, up,
+        col_x, hi_x ? 3.2f : 2.f);
 
     const glm::vec3 dir = light_dir_from_gizmo(g);
-    draw_sun_icon(dl, project_sphere(dir, center, radius, right, up), 5.f, front);
+    draw_sun_icon(dl, project_sphere(dir, center, radius, right, up), 5.f, ball);
 
     if (ImGui::BeginPopup("light_color")) {
         ImGui::ColorPicker3("##light_color", &light.color.x,

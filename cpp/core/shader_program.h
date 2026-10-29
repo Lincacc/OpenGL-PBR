@@ -23,6 +23,14 @@ struct Shader {
         glUniform3fv(glGetUniformLocation(programHandle, name.c_str()), 1, glm::value_ptr(vec));
     }
 
+    void setVec2f(const std::string& name, const glm::vec2& vec) {
+        glUniform2fv(glGetUniformLocation(programHandle, name.c_str()), 1, glm::value_ptr(vec));
+    }
+
+    void setFloat(const std::string& name, float value) {
+        glUniform1f(glGetUniformLocation(programHandle, name.c_str()), value);
+    }
+
 	void compile(const std::string& vCode, const std::string& fCode) {
 		GLuint vShaderHandle = glCreateShader(GL_VERTEX_SHADER);
         if (vShaderHandle == 0) {

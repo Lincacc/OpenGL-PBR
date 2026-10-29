@@ -1,6 +1,8 @@
 #include "core/core.h"
 #include "core/actor.h"
+#include "core/light.h"
 #include "core/shaders/shader_code_0.h"
+#include "core/materials/material_0.h"
 #include "core/camera.h"
 
 #include <GLFW/glfw3.h>
@@ -14,6 +16,9 @@
 
 int width = 1280;
 int height = 720;
+
+Light sun;
+glm::vec3 ambientColor = glm::vec3(0.878f, 0.89f, 0.921f);
 
 Camera camera;
 float orbitYaw = 0.f;
@@ -82,9 +87,16 @@ int main() {
     glfwSetScrollCallback(window, scroll_callback);
     apply_orbit();
 
+    sun.dir = glm::normalize(glm::vec3(1.f));
+    sun.color = glm::vec3(1.f);
+
     Actor actor;
     actor.shader.compile(vShaderCode, fShaderCode);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
+    actor.material.albedo = glm::vec3(1, 0, 1);
+    actor.material.matParams.r = 0;
+    actor.material.matParams.g = 0.1;
+    actor.material.matParams.b = 0;
     actor.init();
 
     glEnable(GL_DEPTH_TEST);
@@ -96,15 +108,20 @@ int main() {
         camera.aspect = float(width) / float(height);
         const auto& v = camera.view();
         const auto& p = camera.project();
-
+        
         glViewport(0, 0, width, height);
-        glClearColor(0.f, 0.f, 0.f, 1.f);
+        glClearColor(ambientColor.r, ambientColor.g, ambientColor.b, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         actor.shader.bind();
         actor.shader.setMatrix4("viewMatrix", v);
         actor.shader.setMatrix4("projectionMatrix", p);
         actor.shader.setVec3f("cameraPos", camera.position);
+
+        actor.shader.setVec3f("lightDir", sun.dir);
+        actor.shader.setVec3f("lightColor", sun.color);
+        actor.shader.setVec3f("ambientColor", ambientColor);
+
         actor.draw();
 
         ImGui_ImplOpenGL3_NewFrame();

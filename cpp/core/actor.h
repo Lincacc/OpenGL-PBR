@@ -2,6 +2,7 @@
 
 #include "shader_program.h"
 #include "obj_loader.h"
+#include "materials/material_0.h"
 
 struct Vertex {
     glm::vec3 position;
@@ -12,6 +13,7 @@ struct Vertex {
 struct Actor {
     Shader shader;
     ObjMesh mesh;
+    Material material;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
@@ -64,6 +66,9 @@ struct Actor {
     }
 
     void draw() {
+        shader.setVec3f("albedo", material.albedo);
+        shader.setVec3f("matParams", material.matParams);
+
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
         glBindVertexArray(0);

@@ -29,18 +29,67 @@ const std::string fShaderCode = R"(
     in vec3 vNormal;
 
     uniform vec3 cameraPos;
+    uniform vec3 lightDir;      // 从表面指向光源
+    uniform vec3 lightColor;    // 线性，已含强度
+    uniform vec3 albedo;        // 线性固有色
+    uniform vec3 matParams;     // x=metallic  y=roughness  z=ao
+    uniform vec3 ambientColor;  // 线性环境，没有 IBL 时的占位
 
     layout(location = 0) out vec4 fragColor;
+
+    const float PI = 3.14159265359;
+
+    float D_GGX(float NdotH, float a) {
+        float a2 = a * a;
+        float d = (NdotH * a2 - NdotH) * NdotH + 1.0;
+        return a2 / max(PI * d * d, 1e-7);
+    }
+
+    float G_Smith(float NdotV, float NdotL, float roughness) {
+        float r = roughness + 1.0;
+        float k = (r * r) / 8.0;
+        float gV = NdotV / (NdotV * (1.0 - k) + k);
+        float gL = NdotL / (NdotL * (1.0 - k) + k);
+        return gV * gL;
+    }
+
+    vec3 F_Schlick(float cosTheta, vec3 F0) {
+        return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+    }
 
     void main() {
         vec3 N = normalize(vNormal);
         vec3 V = normalize(cameraPos - vWorldPos);
+        vec3 L = normalize(lightDir);
+        vec3 H = normalize(V + L);
 
-        float facing = abs(dot(N, V));
+        float metallic  = clamp(matParams.x, 0.0, 1.0);
+        float roughness = clamp(matParams.y, 0.045, 1.0);
+        float ao        = clamp(matParams.z, 0.0, 1.0);
+        float a         = roughness * roughness;
 
-        vec3 albedo = vec3(0.75, 0.75, 0.78);
-        vec3 color = albedo * mix(0.25, 1.0, facing);
+        float NdotL = max(dot(N, L), 0.0);
+        float NdotV = max(dot(N, V), 1e-4);
+        float NdotH = max(dot(N, H), 0.0);
+        float VdotH = max(dot(V, H), 0.0);
 
+        // 虚幻：电介质 F0=0.04，金属 F0=albedo
+        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        vec3 F  = F_Schlick(VdotH, F0);
+
+        float D = D_GGX(NdotH, a);
+        float G = G_Smith(NdotV, NdotL, roughness);
+        vec3  spec = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
+
+        vec3 kD = (1.0 - F) * (1.0 - metallic);
+        vec3 diffuse = kD * albedo / PI;
+
+        vec3 direct = (diffuse + spec) * lightColor * NdotL;
+        vec3 ambient = ambientColor * albedo * (1.0 - metallic) * ao;
+
+        vec3 color = ambient + direct;
+        color = color / (color + vec3(1.0));
+        color = pow(color, vec3(1.0 / 2.2));
         fragColor = vec4(color, 1.0);
     }
 )";

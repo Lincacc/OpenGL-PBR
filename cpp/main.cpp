@@ -4,6 +4,7 @@
 #include "core/shaders/shader_code_0.h"
 #include "core/materials/material_0.h"
 #include "core/camera.h"
+#include "ui/operate_pannel.h"
 
 #include <GLFW/glfw3.h>
 
@@ -17,6 +18,7 @@
 int width = 1280;
 int height = 720;
 
+LightGizmo sun_gizmo;
 Light sun;
 glm::vec3 ambientColor = glm::vec3(0.878f, 0.89f, 0.921f);
 
@@ -38,15 +40,22 @@ static void apply_orbit() {
 }
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (button != GLFW_MOUSE_BUTTON_LEFT)
+    ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+    if (ImGui::GetIO().WantCaptureMouse) {
         return;
+    }
+    if (button != GLFW_MOUSE_BUTTON_LEFT) {
+        return;
+    }
     orbitDragging = (action == GLFW_PRESS);
     glfwGetCursorPos(window, &orbitLastX, &orbitLastY);
 }
 
 static void cursor_pos_callback(GLFWwindow* window, double x, double y) {
-    if (!orbitDragging)
+    ImGui_ImplGlfw_CursorPosCallback(window, x, y);
+    if (ImGui::GetIO().WantCaptureMouse || !orbitDragging) {
         return;
+    }
 
     orbitYaw += float(x - orbitLastX) * 0.005f;
     orbitPitch += float(orbitLastY - y) * 0.005f;
@@ -58,6 +67,11 @@ static void cursor_pos_callback(GLFWwindow* window, double x, double y) {
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    ImGui_ImplGlfw_ScrollCallback(window, xoffset, yoffset);
+    if (ImGui::GetIO().WantCaptureMouse) {
+        return;
+    }
+
     orbitRadius *= std::pow(0.9f, float(yoffset));
     orbitRadius = std::clamp(orbitRadius, 0.5f, 20.f);
     apply_orbit();
@@ -77,18 +91,19 @@ int main() {
         throw std::runtime_error("load gl error!");
     }
 
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 460");
-
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
     glfwSetScrollCallback(window, scroll_callback);
     apply_orbit();
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, false);
+    ImGui_ImplOpenGL3_Init("#version 460");
+
     sun.dir = glm::normalize(glm::vec3(1.f));
     sun.color = glm::vec3(1.f);
+    sun_gizmo = light_gizmo_from_dir(sun.dir);
 
     Actor actor;
     actor.shader.compile(vShaderCode, fShaderCode);
@@ -127,6 +142,8 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+
+        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh);
 
 #pragma region memory usage
         auto usage = host_usage();

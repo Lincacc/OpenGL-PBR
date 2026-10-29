@@ -153,12 +153,12 @@ inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float 
         drag_ring = -1;
 
     if (ImGui::IsItemActive() && drag_ring >= 0) {
-        const glm::vec3 p = right * ((mouse.x - center.x) / radius)
-            - up * ((mouse.y - center.y) / radius);
+        const ImVec2 d = ImGui::GetIO().MouseDelta;
+        const float sens = 2.f / radius;
         if (drag_ring == 1)
-            g.yaw = std::atan2(p.x, p.z);
+            g.yaw += d.x * sens;
         else
-            g.pitch = std::clamp(std::atan2(p.y, glm::dot(p, horiz)), -1.55f, 1.55f);
+            g.pitch = std::clamp(g.pitch - d.y * sens, -1.55f, 1.55f);
     }
 
     const int lit_ring = drag_ring >= 0 ? drag_ring : hover_ring;

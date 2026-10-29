@@ -1,2 +1,3 @@
 /build
 /*.ini
+/cpp/resource/*.mesh

@@ -1,5 +1,6 @@
 #include "core/core.h"
-#include "core/shader_code.h"
+#include "core/actor.h"
+#include "core/shaders/shader_code_0.h"
 #include "core/camera.h"
 
 #include <GLFW/glfw3.h>

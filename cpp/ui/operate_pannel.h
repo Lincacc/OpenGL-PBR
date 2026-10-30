@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/hdr_preview.h"
 #include "core/light.h"
 #include "core/materials/material_0.h"
 #include "core/obj_loader.h"
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
 
 struct LightGizmo {
     float yaw = 0.785398f;
@@ -178,8 +180,69 @@ inline void draw_preview_light(int index, PreviewLight& L)
     ImGui::PopID();
 }
 
+struct EnvironmentSettings {
+    int mode = 0;
+    glm::vec3 solidColor = glm::vec3(0.878f, 0.89f, 0.921f);
+    HdrPreview hdr;
+    std::string hdrError;
+};
+
+inline void draw_environment_panel(EnvironmentSettings& env)
+{
+    if (!ImGui::CollapsingHeader("\xE7\x8E\xAF\xE5\xA2\x83"))
+        return;
+
+    ImGui::RadioButton("Solid", &env.mode, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("HDR", &env.mode, 1);
+
+    if (env.mode == 0) {
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+        ImGui::ColorPicker3("##solid_ambient", &env.solidColor.x,
+            ImGuiColorEditFlags_PickerHueWheel |
+            ImGuiColorEditFlags_Float |
+            ImGuiColorEditFlags_NoAlpha |
+            ImGuiColorEditFlags_NoSidePreview |
+            ImGuiColorEditFlags_NoSmallPreview |
+            ImGuiColorEditFlags_NoLabel);
+        return;
+    }
+
+    const float side = std::min(ImGui::GetContentRegionAvail().x, 240.f);
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    const ImVec2 p1(p0.x + side, p0.y + side);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, IM_COL32(48, 48, 52, 255), 4.f);
+    if (env.hdr.tex != 0 && env.hdr.w > 0 && env.hdr.h > 0) {
+        const float ia = float(env.hdr.w) / float(env.hdr.h);
+        float dw = side;
+        float dh = side;
+        float ox = 0.f;
+        float oy = 0.f;
+        if (ia > 1.f) {
+            dh = side / ia;
+            oy = (side - dh) * 0.5f;
+        } else {
+            dw = side * ia;
+            ox = (side - dw) * 0.5f;
+        }
+        dl->AddImage(ImTextureRef(ImTextureID(env.hdr.tex)),
+            ImVec2(p0.x + ox, p0.y + oy),
+            ImVec2(p0.x + ox + dw, p0.y + oy + dh));
+    }
+    dl->AddRect(p0, p1, IM_COL32(0, 0, 0, 60), 4.f);
+    ImGui::Dummy(ImVec2(side, side));
+    if (ImGui::Button("Change")) {
+        std::wstring path;
+        if (open_hdr_file_dialog(path))
+            env.hdrError = hdr_preview_load(env.hdr, path);
+    }
+    if (!env.hdrError.empty())
+        ImGui::TextWrapped("%s", env.hdrError.c_str());
+}
+
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
-    Material& material, const ObjMesh& mesh)
+    Material& material, const ObjMesh& mesh, EnvironmentSettings& env)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -215,6 +278,8 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             static PreviewLight preview_lights[5]{};
             for (int i = 0; i < 5; ++i)
                 draw_preview_light(i, preview_lights[i]);
+
+            draw_environment_panel(env);
 
             ImGui::EndTabItem();
         }

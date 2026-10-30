@@ -14,15 +14,17 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 
 int width = 1280;
 int height = 720;
 
 LightGizmo sun_gizmo;
 Light sun;
-glm::vec3 ambientColor = glm::vec3(0.878f, 0.89f, 0.921f);
+EnvironmentSettings environment;
+glm::vec3 ambientColor = environment.solidColor;
 
 Camera camera;
 float orbitYaw = 0.f;
@@ -163,12 +165,18 @@ int main() {
     Ground ground;
     ground.init(floorY, 4.f);
 
-    const SH9 shAmbient = sh_irradiance_from_sky_ground(ambientColor, ambientColor * 0.25f);
+    SH9 shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
+    glm::vec3 shSolidColor = environment.solidColor;
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
     while (!glfwWindowShouldClose(window)) {
+        if (environment.solidColor != shSolidColor) {
+            shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
+            shSolidColor = environment.solidColor;
+        }
+        ambientColor = environment.solidColor;
         glfwPollEvents();
         glfwGetFramebufferSize(window, &width, &height);
 
@@ -198,7 +206,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh);
+        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment);
 
 #pragma region memory usage
         auto usage = host_usage();
@@ -216,6 +224,7 @@ int main() {
         glfwSwapBuffers(window);
     }
 
+    hdr_preview_destroy(environment.hdr);
     glfwDestroyWindow(window);
     glfwTerminate();
 

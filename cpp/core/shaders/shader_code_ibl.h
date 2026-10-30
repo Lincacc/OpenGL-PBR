@@ -84,6 +84,22 @@ const std::string fIblLutShaderCode = R"(
     }
 )";
 
+const std::string fIblSkyGroundShaderCode = R"(
+    #version 460 core
+
+    in vec3 vLocalPos;
+
+    uniform vec3 skyColor;
+    uniform vec3 groundColor;
+
+    layout(location = 0) out vec4 fragColor;
+
+    void main() {
+        vec3 n = normalize(vLocalPos);
+        fragColor = vec4(n.y >= 0.0 ? skyColor : groundColor, 1.0);
+    }
+)";
+
 const std::string fIblPrefilterShaderCode = R"(
     #version 460 core
 

@@ -9,10 +9,17 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
+
 constexpr int kIblPrefilterSize = 256;
 constexpr int kIblPrefilterMips = 9;
 constexpr float kIblPrefilterMaxLod = 8.f;
 constexpr int kIblPrefilterSamples = 256;
+constexpr int kIblSolidCubeSize = 32;
+constexpr int kIblSolidPrefilterSize = 32;
+constexpr int kIblSolidPrefilterMips = 6;
+constexpr float kIblSolidPrefilterMaxLod = 5.f;
+constexpr int kIblSolidPrefilterSamples = 64;
 constexpr int kIblLutSize = 128;
 constexpr int kIblLutSamples = 1024;
 
@@ -126,8 +133,96 @@ inline GLuint ibl_brdf_lut_create() {
     return lut;
 }
 
-inline GLuint ibl_prefilter_create(GLuint env_cube) {
-    if (env_cube == 0)
+inline int ibl_mip_count(int face) {
+    int levels = 1;
+    while (face > 1) {
+        face >>= 1;
+        ++levels;
+    }
+    return levels;
+}
+
+inline GLuint ibl_sky_ground_cube_create(const glm::vec3& sky, const glm::vec3& ground, int face) {
+    if (face <= 0)
+        return 0;
+
+    static Shader sky_ground;
+    if (sky_ground.programHandle == 0)
+        sky_ground.compile(vEquirectToCubeShaderCode, fIblSkyGroundShaderCode);
+
+    GLuint cube = 0;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &cube);
+    if (cube == 0)
+        return 0;
+
+    const int levels = ibl_mip_count(face);
+    glTextureStorage2D(cube, levels, GL_RGB16F, face, face);
+    glTextureParameteri(cube, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(cube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    GLuint fbo = 0;
+    glCreateFramebuffers(1, &fbo);
+    if (fbo == 0) {
+        glDeleteTextures(1, &cube);
+        return 0;
+    }
+
+    GLint vp[4] = {};
+    glGetIntegerv(GL_VIEWPORT, vp);
+    GLint prev_fbo = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_fbo);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glViewport(0, 0, face, face);
+    glDisable(GL_DEPTH_TEST);
+
+    sky_ground.bind();
+    sky_ground.setMatrix4("projectionMatrix", ibl_cube_proj());
+    sky_ground.setVec3f("skyColor", sky);
+    sky_ground.setVec3f("groundColor", ground);
+
+    if (!ibl_bind_cube_vao()) {
+        glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+        glViewport(vp[0], vp[1], vp[2], vp[3]);
+        glEnable(GL_DEPTH_TEST);
+        glDeleteFramebuffers(1, &fbo);
+        glDeleteTextures(1, &cube);
+        return 0;
+    }
+
+    const glm::mat4* views = ibl_cube_views();
+    bool ok = true;
+    for (int i = 0; i < 6 && ok; ++i) {
+        sky_ground.setMatrix4("viewMatrix", views[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, cube, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            ok = false;
+            break;
+        }
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    glEnable(GL_DEPTH_TEST);
+    glDeleteFramebuffers(1, &fbo);
+
+    if (!ok) {
+        glDeleteTextures(1, &cube);
+        return 0;
+    }
+    glGenerateTextureMipmap(cube);
+    return cube;
+}
+
+inline GLuint ibl_prefilter_create(GLuint env_cube, int face_size, int mips, int samples) {
+    if (env_cube == 0 || face_size <= 0 || mips <= 0 || samples <= 0)
         return 0;
 
     static Shader prefilter;
@@ -144,7 +239,7 @@ inline GLuint ibl_prefilter_create(GLuint env_cube) {
     if (cube == 0)
         return 0;
 
-    glTextureStorage2D(cube, kIblPrefilterMips, GL_RGB16F, kIblPrefilterSize, kIblPrefilterSize);
+    glTextureStorage2D(cube, mips, GL_RGB16F, face_size, face_size);
     glTextureParameteri(cube, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTextureParameteri(cube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(cube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -166,11 +261,12 @@ inline GLuint ibl_prefilter_create(GLuint env_cube) {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glDisable(GL_DEPTH_TEST);
 
+    const float max_lod = float(std::max(mips - 1, 1));
     prefilter.bind();
     prefilter.setMatrix4("projectionMatrix", ibl_cube_proj());
     prefilter.setInt("envMap", 0);
     prefilter.setFloat("envResolution", float(src_size));
-    prefilter.setInt("sampleCount", kIblPrefilterSamples);
+    prefilter.setInt("sampleCount", samples);
     glBindTextureUnit(0, env_cube);
 
     if (!ibl_bind_cube_vao()) {
@@ -184,9 +280,9 @@ inline GLuint ibl_prefilter_create(GLuint env_cube) {
 
     const glm::mat4* views = ibl_cube_views();
     bool ok = true;
-    for (int mip = 0; mip < kIblPrefilterMips && ok; ++mip) {
-        const int mip_size = kIblPrefilterSize >> mip;
-        const float roughness = float(mip) / kIblPrefilterMaxLod;
+    for (int mip = 0; mip < mips && ok; ++mip) {
+        const int mip_size = std::max(face_size >> mip, 1);
+        const float roughness = float(mip) / max_lod;
         glViewport(0, 0, mip_size, mip_size);
         prefilter.setFloat("roughness", roughness);
         for (int face = 0; face < 6 && ok; ++face) {
@@ -213,4 +309,18 @@ inline GLuint ibl_prefilter_create(GLuint env_cube) {
         return 0;
     }
     return cube;
+}
+
+inline GLuint ibl_prefilter_create(GLuint env_cube) {
+    return ibl_prefilter_create(env_cube, kIblPrefilterSize, kIblPrefilterMips, kIblPrefilterSamples);
+}
+
+inline GLuint ibl_solid_prefilter_create(const glm::vec3& sky, const glm::vec3& ground) {
+    GLuint src = ibl_sky_ground_cube_create(sky, ground, kIblSolidCubeSize);
+    if (src == 0)
+        return 0;
+    GLuint prefilter = ibl_prefilter_create(
+        src, kIblSolidPrefilterSize, kIblSolidPrefilterMips, kIblSolidPrefilterSamples);
+    ibl_texture_destroy(src);
+    return prefilter;
 }

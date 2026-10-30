@@ -179,6 +179,8 @@ int main() {
     glm::vec3 shSolidColor = environment.solidColor;
     int shMode = 0;
     GLuint shCube = 0;
+    GLuint solidPrefilter = ibl_solid_prefilter_create(
+        environment.solidColor, environment.solidColor * 0.25f);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
@@ -189,6 +191,9 @@ int main() {
                 shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
                 shSolidColor = environment.solidColor;
                 shMode = 0;
+                ibl_texture_destroy(solidPrefilter);
+                solidPrefilter = ibl_solid_prefilter_create(
+                    environment.solidColor, environment.solidColor * 0.25f);
             }
         } else if (environment.envCube != 0) {
             if (shMode != 1 || shCube != environment.envCube) {
@@ -200,6 +205,9 @@ int main() {
             shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
             shSolidColor = environment.solidColor;
             shMode = 0;
+            ibl_texture_destroy(solidPrefilter);
+            solidPrefilter = ibl_solid_prefilter_create(
+                environment.solidColor, environment.solidColor * 0.25f);
         }
         ambientColor = environment.solidColor;
         glfwPollEvents();
@@ -226,13 +234,20 @@ int main() {
         actor.shader.setVec3Array("shIrradiance", shAmbient.c, 9);
         actor.shader.setInt("prefilterMap", 1);
         actor.shader.setInt("brdfLut", 2);
-        actor.shader.setFloat("prefilterMaxLod", kIblPrefilterMaxLod);
-        const bool spec_ibl = environment.mode == 1
-            && environment.prefilterCube != 0
-            && brdfLut != 0;
+        GLuint spec_map = 0;
+        float spec_lod = kIblPrefilterMaxLod;
+        if (environment.mode == 1 && environment.prefilterCube != 0) {
+            spec_map = environment.prefilterCube;
+            spec_lod = kIblPrefilterMaxLod;
+        } else if (environment.mode == 0 && solidPrefilter != 0) {
+            spec_map = solidPrefilter;
+            spec_lod = kIblSolidPrefilterMaxLod;
+        }
+        actor.shader.setFloat("prefilterMaxLod", spec_lod);
+        const bool spec_ibl = spec_map != 0 && brdfLut != 0;
         actor.shader.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
         if (spec_ibl)
-            glBindTextureUnit(1, environment.prefilterCube);
+            glBindTextureUnit(1, spec_map);
         glBindTextureUnit(2, brdfLut);
 
         actor.draw();
@@ -263,6 +278,7 @@ int main() {
     }
 
     hdr_environment_destroy(environment.hdr, environment.envCube, environment.prefilterCube);
+    ibl_texture_destroy(solidPrefilter);
     ibl_texture_destroy(brdfLut);
     glfwDestroyWindow(window);
     glfwTerminate();

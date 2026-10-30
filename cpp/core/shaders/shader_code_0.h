@@ -29,11 +29,11 @@ const std::string fShaderCode = R"(
     in vec3 vNormal;
 
     uniform vec3 cameraPos;
-    uniform vec3 lightDir;      // 从表面指向光源
-    uniform vec3 lightColor;    // 线性，已含强度
-    uniform vec3 albedo;        // 线性固有色
-    uniform vec3 matParams;     // x=metallic  y=roughness  z=ao
-    uniform vec3 ambientColor;  // 线性环境，没有 IBL 时的占位
+    uniform vec3 lightDir;     
+    uniform vec3 lightColor;  
+    uniform vec3 albedo;        
+    uniform vec3 matParams;     
+    uniform vec3 ambientColor;  
 
     layout(location = 0) out vec4 fragColor;
 
@@ -73,7 +73,6 @@ const std::string fShaderCode = R"(
         float NdotH = max(dot(N, H), 0.0);
         float VdotH = max(dot(V, H), 0.0);
 
-        // 虚幻：电介质 F0=0.04，金属 F0=albedo
         vec3 F0 = mix(vec3(0.04), albedo, metallic);
         vec3 F  = F_Schlick(VdotH, F0);
 

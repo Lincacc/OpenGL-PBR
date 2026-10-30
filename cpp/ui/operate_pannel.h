@@ -74,7 +74,26 @@ inline glm::vec3 hsv_to_rgb(float hue_deg, float s, float v) {
     return rgb + glm::vec3(m);
 }
 
-inline void light_yaw_ring(const char* id, LightGizmo& g, const Light& light, float radius)
+inline void rgb_to_hsv(const glm::vec3& rgb, float& hue, float& sat, float& val) {
+    const float r = std::clamp(rgb.x, 0.f, 1.f);
+    const float g = std::clamp(rgb.y, 0.f, 1.f);
+    const float b = std::clamp(rgb.z, 0.f, 1.f);
+    const float mx = std::max(r, std::max(g, b));
+    const float mn = std::min(r, std::min(g, b));
+    const float d = mx - mn;
+    val = mx;
+    sat = mx > 1e-6f ? d / mx : 0.f;
+    if (d < 1e-6f)
+        return;
+    if (mx == r)
+        hue = 60.f * (g - b) / d + (g < b ? 360.f : 0.f);
+    else if (mx == g)
+        hue = 60.f * (b - r) / d + 120.f;
+    else
+        hue = 60.f * (r - g) / d + 240.f;
+}
+
+inline void light_yaw_ring(const char* id, LightGizmo& g, PreviewLight& preview, float radius)
 {
     ImGui::PushID(id);
     const float box = radius * 2.f + 28.f;
@@ -89,28 +108,64 @@ inline void light_yaw_ring(const char* id, LightGizmo& g, const Light& light, fl
     const float mx = mouse.x - center.x;
     const float my = mouse.y - center.y;
     const float md = std::sqrt(mx * mx + my * my);
+    const float core_r = radius * 0.62f;
     const bool on_ring = std::abs(md - radius) <= 8.f;
+    const bool on_core = md <= core_r;
 
     static bool dragging = false;
-    if (ImGui::IsItemActivated() && on_ring)
-        dragging = true;
+    if (ImGui::IsItemActivated()) {
+        if (on_ring)
+            dragging = true;
+        else if (on_core)
+            ImGui::OpenPopup("sun_color");
+    }
     if (!ImGui::IsItemActive())
         dragging = false;
     if (ImGui::IsItemActive() && dragging && md > 1.f)
         g.yaw = std::atan2(mx, -my);
 
+    glm::vec3 rgb = hsv_to_rgb(preview.hue, preview.sat, preview.val);
+    if (ImGui::BeginPopup("sun_color")) {
+        if (ImGui::ColorPicker3("##sun_color", &rgb.x,
+            ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoSidePreview))
+            rgb_to_hsv(rgb, preview.hue, preview.sat, preview.val);
+        ImGui::EndPopup();
+    }
+
     const bool hot = dragging || on_ring;
     const ImU32 ring_col = hot ? IM_COL32(255, 210, 40, 255) : IM_COL32(70, 150, 255, 255);
-    const glm::vec3 col = glm::clamp(light.color, 0.f, 1.f);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddCircleFilled(center, radius * 0.62f, ImGui::GetColorU32(ImVec4(0.729f, 0.741f, 0.764f, 1.f)), 32);
+    dl->AddCircleFilled(center, core_r, ImGui::GetColorU32(ImVec4(0.729f, 0.741f, 0.764f, 1.f)), 32);
     dl->AddCircle(center, radius, ring_col, 64, hot ? 3.2f : 2.f);
     draw_sun_icon(dl,
         ImVec2(center.x + std::sin(g.yaw) * radius, center.y - std::cos(g.yaw) * radius),
-        5.f, color_u32(col, 255));
+        5.f, color_u32(glm::clamp(rgb, 0.f, 1.f), 255));
 
     ImGui::PopID();
+}
+
+inline void draw_preview_light_params(PreviewLight& L)
+{
+    ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &L.enabled);
+    ImGui::BeginDisabled(!L.enabled);
+
+    ImGui::RadioButton("RGB", &L.space, 0);
+    ImGui::SameLine();
+    ImGui::RadioButton("HSV", &L.space, 1);
+    ImGui::SameLine();
+    const glm::vec3 rgb = hsv_to_rgb(L.hue, L.sat, L.val);
+    if (L.space == 0)
+        ImGui::Text("%.2f, %.2f, %.2f", rgb.x, rgb.y, rgb.z);
+    else
+        ImGui::Text("%.0f, %.2f, %.2f", L.hue, L.sat, L.val);
+
+    ImGui::SliderFloat("\xE8\x89\xB2\xE8\xB0\x83", &L.hue, 0.f, 360.f, "%.0f");
+    ImGui::SliderFloat("\xE5\xBD\xA9\xE5\xBA\xA6", &L.sat, 0.f, 1.f, "%.2f");
+    ImGui::SliderFloat("\xE5\x80\xBC", &L.val, 0.f, 1.f, "%.2f");
+    ImGui::SliderFloat("\xE5\xBC\xBA\xE5\xBA\xA6", &L.intensity, 0.f, 10.f, "%.2f");
+
+    ImGui::EndDisabled();
 }
 
 inline void draw_preview_light(int index, PreviewLight& L)
@@ -118,27 +173,8 @@ inline void draw_preview_light(int index, PreviewLight& L)
     ImGui::PushID(index);
     char title[32];
     std::snprintf(title, sizeof(title), "\xE5\x85\x89\xE7\xBA\xBF %d", index + 1);
-    if (ImGui::CollapsingHeader(title)) {
-        ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &L.enabled);
-        ImGui::BeginDisabled(!L.enabled);
-
-        ImGui::RadioButton("RGB", &L.space, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("HSV", &L.space, 1);
-        ImGui::SameLine();
-        const glm::vec3 rgb = hsv_to_rgb(L.hue, L.sat, L.val);
-        if (L.space == 0)
-            ImGui::Text("%.2f, %.2f, %.2f", rgb.x, rgb.y, rgb.z);
-        else
-            ImGui::Text("%.0f, %.2f, %.2f", L.hue, L.sat, L.val);
-
-        ImGui::SliderFloat("\xE8\x89\xB2\xE8\xB0\x83", &L.hue, 0.f, 360.f, "%.0f");
-        ImGui::SliderFloat("\xE5\xBD\xA9\xE5\xBA\xA6", &L.sat, 0.f, 1.f, "%.2f");
-        ImGui::SliderFloat("\xE5\x80\xBC", &L.val, 0.f, 1.f, "%.2f");
-        ImGui::SliderFloat("\xE5\xBC\xBA\xE5\xBA\xA6", &L.intensity, 0.f, 10.f, "%.2f");
-
-        ImGui::EndDisabled();
-    }
+    if (ImGui::CollapsingHeader(title))
+        draw_preview_light_params(L);
     ImGui::PopID();
 }
 
@@ -165,8 +201,15 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
         if (ImGui::BeginTabItem("light")) {
             if (ImGui::CollapsingHeader("\xE5\x85\x89\xE6\xBA\x90\xE6\x97\x8B\xE8\xBD\xAC", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const float ring_r = std::clamp((panel_w - 48.f) * 0.28f, 48.f, 72.f);
-                light_yaw_ring("sun_yaw", gizmo, light, ring_r);
+                static PreviewLight sun_preview{ true, 0, 0.f, 0.f, 1.f, 1.f };
+                light_yaw_ring("sun_yaw", gizmo, sun_preview, ring_r);
                 light.dir = light_dir_from_gizmo(gizmo);
+                ImGui::PushID("sun_rot_params");
+                draw_preview_light_params(sun_preview);
+                ImGui::PopID();
+                light.color = hsv_to_rgb(sun_preview.hue, sun_preview.sat, sun_preview.val);
+                light.intensity = sun_preview.intensity;
+                light.enabled = sun_preview.enabled;
             }
 
             static PreviewLight preview_lights[5]{};

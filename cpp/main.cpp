@@ -137,6 +137,8 @@ int main() {
 
     sun.dir = glm::normalize(glm::vec3(1.f));
     sun.color = glm::vec3(1.f);
+    sun.intensity = 1.f;
+    sun.enabled = true;
     sun_gizmo = light_gizmo_from_dir(sun.dir);
 
     Actor actor;
@@ -183,7 +185,8 @@ int main() {
         actor.shader.setVec3f("cameraPos", camera.position);
 
         actor.shader.setVec3f("lightDir", sun.dir);
-        actor.shader.setVec3f("lightColor", sun.color);
+        actor.shader.setVec3f("lightColor",
+            sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
         actor.shader.setVec3f("ambientColor", ambientColor);
 
         actor.draw();

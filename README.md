@@ -4,4 +4,8 @@ SH 球谐漫反射、IBL 滤波、fms 能量补强、镜面多重散射（预烘
 
 抗锯齿采用系统自带 MSAA
 
-![output-1](assets/output-1.png)![output-2](assets/output-2.png)![output-3](assets/output-3.png)
+<p>
+<img src="assets/output-1.png" alt="output-1" width="32%">
+<img src="assets/output-2.png" alt="output-2" width="32%">
+<img src="assets/output-3.png" alt="output-3" width="32%">
+</p>

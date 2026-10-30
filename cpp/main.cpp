@@ -90,7 +90,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, 8);  // 8x MSAA
 
-    GLFWwindow* window = glfwCreateWindow(width, height, "Weather System", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(width, height, "OpenGL PBR", nullptr, nullptr);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1); // vsync
 

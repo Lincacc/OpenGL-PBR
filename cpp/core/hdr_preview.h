@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <commdlg.h>
 
+#include "ibl.h"
 #include "shader_program.h"
 #include "shaders/shader_code_skybox.h"
 #include "sh.h"
@@ -52,9 +53,10 @@ inline void hdr_cube_destroy(GLuint& cube) {
     }
 }
 
-inline void hdr_environment_destroy(HdrPreview& p, GLuint& cube) {
+inline void hdr_environment_destroy(HdrPreview& p, GLuint& cube, GLuint& prefilter) {
     hdr_preview_destroy(p);
     hdr_cube_destroy(cube);
+    hdr_cube_destroy(prefilter);
 }
 
 inline bool open_hdr_file_dialog(std::wstring& out_path) {
@@ -207,8 +209,9 @@ inline GLuint hdr_bake_cubemap(GLuint equirect) {
         return 0;
 
     constexpr int kFace = 1024;
-    glTextureStorage2D(cube, 1, GL_RGB16F, kFace, kFace);
-    glTextureParameteri(cube, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    constexpr int kLevels = 11;
+    glTextureStorage2D(cube, kLevels, GL_RGB16F, kFace, kFace);
+    glTextureParameteri(cube, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTextureParameteri(cube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(cube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTextureParameteri(cube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -269,10 +272,12 @@ inline GLuint hdr_bake_cubemap(GLuint equirect) {
         glDeleteTextures(1, &cube);
         return 0;
     }
+    glGenerateTextureMipmap(cube);
     return cube;
 }
 
-inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, SH9& dest_sh, const std::wstring& path) {
+inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube,
+    GLuint& dest_prefilter, SH9& dest_sh, const std::wstring& path) {
     if (path.empty())
         return "\xE8\xB7\xAF\xE5\xBE\x84\xE4\xB8\xBA\xE7\xA9\xBA";
 
@@ -409,10 +414,26 @@ inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, SH9
         return "\xE7\xAB\x8B\xE6\x96\xB9\xE4\xBD\x93\xE8\xB4\xB4\xE5\x9B\xBE\xE7\x94\x9F\xE6\x88\x90\xE5\xA4\xB1\xE8\xB4\xA5";
     }
 
+    GLuint prefilter = 0;
+    try {
+        prefilter = ibl_prefilter_create(cube);
+    } catch (const std::exception& e) {
+        glDeleteTextures(1, &cube);
+        hdr_preview_destroy(preview);
+        return std::string("\xE9\xA2\x84\xE6\xBB\xA4\xE6\xB3\xA2\xE7\x8E\xAF\xE5\xA2\x83\xE8\xB4\xB4\xE5\x9B\xBE\xE5\xA4\xB1\xE8\xB4\xA5: ") + e.what();
+    }
+    if (prefilter == 0) {
+        glDeleteTextures(1, &cube);
+        hdr_preview_destroy(preview);
+        return "\xE9\xA2\x84\xE6\xBB\xA4\xE6\xB3\xA2\xE7\x8E\xAF\xE5\xA2\x83\xE8\xB4\xB4\xE5\x9B\xBE\xE7\x94\x9F\xE6\x88\x90\xE5\xA4\xB1\xE8\xB4\xA5";
+    }
+
     hdr_preview_destroy(dest);
     hdr_cube_destroy(dest_cube);
+    hdr_cube_destroy(dest_prefilter);
     dest = preview;
     dest_cube = cube;
+    dest_prefilter = prefilter;
     dest_sh = baked;
     return {};
 }

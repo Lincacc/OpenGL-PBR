@@ -32,8 +32,12 @@ const std::string fShaderCode = R"(
     uniform vec3 lightDir;     
     uniform vec3 lightColor;  
     uniform vec3 albedo;        
-    uniform vec3 matParams;     
+    uniform vec3 matParams;
     uniform vec3 shIrradiance[9];
+    uniform samplerCube prefilterMap;
+    uniform sampler2D brdfLut;
+    uniform float prefilterMaxLod;
+    uniform int iblSpecEnabled;
 
     layout(location = 0) out vec4 fragColor;
 
@@ -99,11 +103,24 @@ const std::string fShaderCode = R"(
 
         vec3 direct = (diffuse + spec) * lightColor * NdotL;
 
-        vec3 F_ibl = F_Schlick(NdotV, F0);
-        vec3 kD_ibl = (1.0 - F_ibl) * (1.0 - metallic);
-        vec3 ambient = kD_ibl * albedo / PI * evalSHIrradiance(N) * ao;
+        vec3 FssEss = F_Schlick(NdotV, F0);
+        vec3 spec_ibl = vec3(0.0);
+        if (iblSpecEnabled != 0) {
+            vec3 R = reflect(-V, N);
+            vec3 prefiltered = textureLod(prefilterMap, R, roughness * prefilterMaxLod).rgb;
+            vec2 dfg = texture(brdfLut, vec2(NdotV, roughness)).rg;
+            FssEss = F0 * dfg.x + dfg.y;
+            float Ess = dfg.x + dfg.y;
+            float Ems = 1.0 - Ess;
+            vec3 Favg = F0 + (1.0 - F0) / 21.0;
+            vec3 Fms = FssEss * Favg / max(vec3(1.0) - Ems * Favg, vec3(1e-5));
+            float horizon = min(1.0 + dot(R, N), 1.0);
+            spec_ibl = prefiltered * (FssEss + Fms) * (horizon * horizon);
+        }
+        vec3 kD_ibl = (1.0 - FssEss) * (1.0 - metallic);
+        vec3 diffuse_ibl = kD_ibl * albedo / PI * evalSHIrradiance(N) * ao;
 
-        vec3 color = ambient + direct;
+        vec3 color = diffuse_ibl + spec_ibl + direct;
         color = color / (color + vec3(1.0));
         color = pow(color, vec3(1.0 / 2.2));
         fragColor = vec4(color, 1.0);

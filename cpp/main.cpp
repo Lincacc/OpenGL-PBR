@@ -3,6 +3,7 @@
 #include "core/ground.h"
 #include "core/skybox.h"
 #include "core/light.h"
+#include "core/ibl.h"
 #include "core/sh.h"
 #include "core/shaders/shader_code_0.h"
 #include "core/materials/material_0.h"
@@ -170,6 +171,10 @@ int main() {
     skybox.init();
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
+    GLuint brdfLut = ibl_brdf_lut_create();
+    if (brdfLut == 0)
+        throw std::runtime_error("ibl_brdf_lut_create failed");
+
     SH9 shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
     glm::vec3 shSolidColor = environment.solidColor;
     int shMode = 0;
@@ -219,6 +224,16 @@ int main() {
         actor.shader.setVec3f("lightColor",
             sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
         actor.shader.setVec3Array("shIrradiance", shAmbient.c, 9);
+        actor.shader.setInt("prefilterMap", 1);
+        actor.shader.setInt("brdfLut", 2);
+        actor.shader.setFloat("prefilterMaxLod", kIblPrefilterMaxLod);
+        const bool spec_ibl = environment.mode == 1
+            && environment.prefilterCube != 0
+            && brdfLut != 0;
+        actor.shader.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
+        if (spec_ibl)
+            glBindTextureUnit(1, environment.prefilterCube);
+        glBindTextureUnit(2, brdfLut);
 
         actor.draw();
 
@@ -247,7 +262,8 @@ int main() {
         glfwSwapBuffers(window);
     }
 
-    hdr_environment_destroy(environment.hdr, environment.envCube);
+    hdr_environment_destroy(environment.hdr, environment.envCube, environment.prefilterCube);
+    ibl_texture_destroy(brdfLut);
     glfwDestroyWindow(window);
     glfwTerminate();
 

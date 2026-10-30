@@ -37,6 +37,10 @@ struct Shader {
         glUniform1f(glGetUniformLocation(programHandle, name.c_str()), value);
     }
 
+    void setInt(const std::string& name, int value) {
+        glUniform1i(glGetUniformLocation(programHandle, name.c_str()), value);
+    }
+
 	void compile(const std::string& vCode, const std::string& fCode) {
 		GLuint vShaderHandle = glCreateShader(GL_VERTEX_SHADER);
         if (vShaderHandle == 0) {

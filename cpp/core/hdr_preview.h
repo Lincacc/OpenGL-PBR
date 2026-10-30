@@ -10,13 +10,20 @@
 #include <windows.h>
 #include <commdlg.h>
 
+#include "shader_program.h"
+#include "shaders/shader_code_skybox.h"
+#include "skybox.h"
+
 #include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -35,6 +42,18 @@ inline void hdr_preview_destroy(HdrPreview& p) {
     }
     p.w = 0;
     p.h = 0;
+}
+
+inline void hdr_cube_destroy(GLuint& cube) {
+    if (cube != 0) {
+        glDeleteTextures(1, &cube);
+        cube = 0;
+    }
+}
+
+inline void hdr_environment_destroy(HdrPreview& p, GLuint& cube) {
+    hdr_preview_destroy(p);
+    hdr_cube_destroy(cube);
 }
 
 inline bool open_hdr_file_dialog(std::wstring& out_path) {
@@ -154,7 +173,105 @@ inline unsigned char hdr_tonemap_u8(float v) {
     return static_cast<unsigned char>(std::clamp(int(v * 255.f + 0.5f), 0, 255));
 }
 
-inline std::string hdr_preview_load(HdrPreview& dest, const std::wstring& path) {
+inline GLuint hdr_bake_cubemap(GLuint equirect) {
+    if (equirect == 0)
+        return 0;
+
+    static Shader convert;
+    static GLuint vao = 0, vbo = 0;
+    if (convert.programHandle == 0)
+        convert.compile(vEquirectToCubeShaderCode, fEquirectToCubeShaderCode);
+    if (vao == 0) {
+        glCreateVertexArrays(1, &vao);
+        glCreateBuffers(1, &vbo);
+        if (vao == 0 || vbo == 0) {
+            if (vao != 0)
+                glDeleteVertexArrays(1, &vao);
+            if (vbo != 0)
+                glDeleteBuffers(1, &vbo);
+            vao = 0;
+            vbo = 0;
+            return 0;
+        }
+        glNamedBufferStorage(vbo, sizeof(kUnitCubeTriangles), kUnitCubeTriangles, 0);
+        glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(float) * 3);
+        glEnableVertexArrayAttrib(vao, 0);
+        glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+        glVertexArrayAttribBinding(vao, 0, 0);
+    }
+
+    GLuint cube = 0;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &cube);
+    if (cube == 0)
+        return 0;
+
+    constexpr int kFace = 1024;
+    glTextureStorage2D(cube, 1, GL_RGB16F, kFace, kFace);
+    glTextureParameteri(cube, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(cube, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(cube, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    GLuint fbo = 0;
+    glCreateFramebuffers(1, &fbo);
+    if (fbo == 0) {
+        glDeleteTextures(1, &cube);
+        return 0;
+    }
+
+    const glm::mat4 proj = glm::perspective(glm::radians(90.f), 1.f, 0.1f, 10.f);
+    const glm::mat4 views[6] = {
+        glm::lookAt(glm::vec3(0.f), glm::vec3(1.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f)),
+        glm::lookAt(glm::vec3(0.f), glm::vec3(-1.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f)),
+        glm::lookAt(glm::vec3(0.f), glm::vec3(0.f, 1.f, 0.f), glm::vec3(0.f, 0.f, 1.f)),
+        glm::lookAt(glm::vec3(0.f), glm::vec3(0.f, -1.f, 0.f), glm::vec3(0.f, 0.f, -1.f)),
+        glm::lookAt(glm::vec3(0.f), glm::vec3(0.f, 0.f, 1.f), glm::vec3(0.f, -1.f, 0.f)),
+        glm::lookAt(glm::vec3(0.f), glm::vec3(0.f, 0.f, -1.f), glm::vec3(0.f, -1.f, 0.f)),
+    };
+
+    GLint vp[4] = {};
+    glGetIntegerv(GL_VIEWPORT, vp);
+    GLint prev_fbo = 0;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prev_fbo);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glViewport(0, 0, kFace, kFace);
+    glDisable(GL_DEPTH_TEST);
+
+    convert.bind();
+    convert.setMatrix4("projectionMatrix", proj);
+    convert.setInt("equirectMap", 0);
+    glBindTextureUnit(0, equirect);
+    glBindVertexArray(vao);
+
+    bool ok = true;
+    for (int i = 0; i < 6 && ok; ++i) {
+        convert.setMatrix4("viewMatrix", views[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, cube, 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            ok = false;
+            break;
+        }
+        glClear(GL_COLOR_BUFFER_BIT);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
+
+    glBindVertexArray(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    glEnable(GL_DEPTH_TEST);
+    glDeleteFramebuffers(1, &fbo);
+
+    if (!ok) {
+        glDeleteTextures(1, &cube);
+        return 0;
+    }
+    return cube;
+}
+
+inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, const std::wstring& path) {
     if (path.empty())
         return "\xE8\xB7\xAF\xE5\xBE\x84\xE4\xB8\xBA\xE7\xA9\xBA";
 
@@ -229,21 +346,69 @@ inline std::string hdr_preview_load(HdrPreview& dest, const std::wstring& path) 
         }
     }
 
-    GLuint tex = 0;
-    glCreateTextures(GL_TEXTURE_2D, 1, &tex);
-    if (tex == 0)
+    HdrPreview preview{};
+    glCreateTextures(GL_TEXTURE_2D, 1, &preview.tex);
+    if (preview.tex == 0)
         return "\xE5\x88\x9B\xE5\xBB\xBA\xE9\xA2\x84\xE8\xA7\x88\xE7\xBA\xB9\xE7\x90\x86\xE5\xA4\xB1\xE8\xB4\xA5";
 
-    glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTextureStorage2D(tex, 1, GL_RGBA8, pw, ph);
-    glTextureSubImage2D(tex, 0, 0, 0, pw, ph, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    glTextureParameteri(preview.tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(preview.tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(preview.tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(preview.tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureStorage2D(preview.tex, 1, GL_RGBA8, pw, ph);
+    glTextureSubImage2D(preview.tex, 0, 0, 0, pw, ph, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    preview.w = pw;
+    preview.h = ph;
+
+    int ew = width;
+    int eh = height;
+    if (ew > 4096) {
+        eh = std::max(1, eh * 4096 / ew);
+        ew = 4096;
+    }
+    std::vector<float> equirect_rgb(size_t(ew) * size_t(eh) * 3);
+    for (int y = 0; y < eh; ++y) {
+        const int sy = std::min(height - 1, y * height / eh);
+        for (int x = 0; x < ew; ++x) {
+            const int sx = std::min(width - 1, x * width / ew);
+            const float* s = rgb.data() + (size_t(sy) * size_t(width) + size_t(sx)) * 3;
+            float* d = equirect_rgb.data() + (size_t(y) * size_t(ew) + size_t(x)) * 3;
+            d[0] = s[0];
+            d[1] = s[1];
+            d[2] = s[2];
+        }
+    }
+
+    GLuint equirect = 0;
+    glCreateTextures(GL_TEXTURE_2D, 1, &equirect);
+    if (equirect == 0) {
+        hdr_preview_destroy(preview);
+        return "\xE5\x88\x9B\xE5\xBB\xBA\xE7\xAD\x89\xE8\xB7\x9D\xE6\x9F\xB1\xE7\x8A\xB6\xE7\xBA\xB9\xE7\x90\x86\xE5\xA4\xB1\xE8\xB4\xA5";
+    }
+    glTextureParameteri(equirect, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTextureParameteri(equirect, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(equirect, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(equirect, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureStorage2D(equirect, 1, GL_RGB16F, ew, eh);
+    glTextureSubImage2D(equirect, 0, 0, 0, ew, eh, GL_RGB, GL_FLOAT, equirect_rgb.data());
+
+    GLuint cube = 0;
+    try {
+        cube = hdr_bake_cubemap(equirect);
+    } catch (const std::exception& e) {
+        glDeleteTextures(1, &equirect);
+        hdr_preview_destroy(preview);
+        return std::string("\xE7\xAB\x8B\xE6\x96\xB9\xE4\xBD\x93\xE8\xB4\xB4\xE5\x9B\xBE\xE8\xBD\xAC\xE6\x8D\xA2\xE5\xA4\xB1\xE8\xB4\xA5: ") + e.what();
+    }
+    glDeleteTextures(1, &equirect);
+    if (cube == 0) {
+        hdr_preview_destroy(preview);
+        return "\xE7\xAB\x8B\xE6\x96\xB9\xE4\xBD\x93\xE8\xB4\xB4\xE5\x9B\xBE\xE7\x94\x9F\xE6\x88\x90\xE5\xA4\xB1\xE8\xB4\xA5";
+    }
 
     hdr_preview_destroy(dest);
-    dest.tex = tex;
-    dest.w = pw;
-    dest.h = ph;
+    hdr_cube_destroy(dest_cube);
+    dest = preview;
+    dest_cube = cube;
     return {};
 }

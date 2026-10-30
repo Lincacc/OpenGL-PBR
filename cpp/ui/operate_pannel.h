@@ -184,6 +184,7 @@ struct EnvironmentSettings {
     int mode = 0;
     glm::vec3 solidColor = glm::vec3(0.878f, 0.89f, 0.921f);
     HdrPreview hdr;
+    GLuint envCube = 0;
     std::string hdrError;
 };
 
@@ -235,7 +236,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
     if (ImGui::Button("Change")) {
         std::wstring path;
         if (open_hdr_file_dialog(path))
-            env.hdrError = hdr_preview_load(env.hdr, path);
+            env.hdrError = hdr_environment_load(env.hdr, env.envCube, path);
     }
     if (!env.hdrError.empty())
         ImGui::TextWrapped("%s", env.hdrError.c_str());

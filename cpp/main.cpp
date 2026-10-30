@@ -1,6 +1,7 @@
 #include "core/core.h"
 #include "core/actor.h"
 #include "core/ground.h"
+#include "core/skybox.h"
 #include "core/light.h"
 #include "core/sh.h"
 #include "core/shaders/shader_code_0.h"
@@ -165,6 +166,10 @@ int main() {
     Ground ground;
     ground.init(floorY, 4.f);
 
+    Skybox skybox;
+    skybox.init();
+    glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
     SH9 shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
     glm::vec3 shSolidColor = environment.solidColor;
 
@@ -202,6 +207,9 @@ int main() {
 
         actor.draw();
 
+        if (environment.mode == 1 && environment.envCube != 0)
+            skybox.draw(v, p, environment.envCube);
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -224,7 +232,7 @@ int main() {
         glfwSwapBuffers(window);
     }
 
-    hdr_preview_destroy(environment.hdr);
+    hdr_environment_destroy(environment.hdr, environment.envCube);
     glfwDestroyWindow(window);
     glfwTerminate();
 

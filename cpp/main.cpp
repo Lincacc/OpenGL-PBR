@@ -100,6 +100,38 @@ int main() {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImGui::StyleColorsLight();
+    {
+        const ImVec4 bg(0.937f, 0.956f, 0.976f, 1.f);
+        ImGuiStyle& st = ImGui::GetStyle();
+        st.Colors[ImGuiCol_WindowBg] = bg;
+        st.Colors[ImGuiCol_ChildBg] = bg;
+        st.Colors[ImGuiCol_TitleBg] = bg;
+        st.Colors[ImGuiCol_TitleBgActive] = bg;
+        st.Colors[ImGuiCol_TitleBgCollapsed] = bg;
+        st.Colors[ImGuiCol_MenuBarBg] = bg;
+        st.Colors[ImGuiCol_Header] = bg;
+        st.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_HeaderActive] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_Tab] = bg;
+        st.Colors[ImGuiCol_TabHovered] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_TabSelected] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_TabSelectedOverline] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_TabDimmed] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_TabDimmedSelected] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.729f, 0.741f, 0.764f, 1.f);
+        st.Colors[ImGuiCol_Border] = ImVec4(0.f, 0.f, 0.f, 0.f);
+    }
+    {
+        ImGuiIO& imgui_io = ImGui::GetIO();
+        ImFontConfig font_cfg;
+        font_cfg.OversampleH = 2;
+        font_cfg.FontNo = 0;
+        const char* font_path = "C:\\Windows\\Fonts\\msyh.ttc";
+        if (!imgui_io.Fonts->AddFontFromFileTTF(font_path, 18.f, &font_cfg,
+            imgui_io.Fonts->GetGlyphRangesChineseSimplifiedCommon()))
+            imgui_io.Fonts->AddFontDefault();
+    }
     ImGui_ImplGlfw_InitForOpenGL(window, false);
     ImGui_ImplOpenGL3_Init("#version 460");
 

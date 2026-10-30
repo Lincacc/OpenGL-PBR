@@ -40,7 +40,12 @@ include_directories(cpp)
 file(GLOB_RECURSE SOURCES "cpp/*.cpp")
 file(GLOB_RECURSE HEADERS "cpp/*.h")
 
-add_executable(OpenGLPBR ${SOURCES} ${HEADERS})
+add_executable(OpenGLPBR WIN32 ${SOURCES} ${HEADERS})
+
+if(MSVC)
+    target_link_options(OpenGLPBR PRIVATE "/ENTRY:mainCRTStartup")
+    target_compile_options(OpenGLPBR PRIVATE /utf-8)
+endif()
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT OpenGLPBR)
 

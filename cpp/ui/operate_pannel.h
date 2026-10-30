@@ -11,10 +11,20 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 struct LightGizmo {
     float yaw = 0.785398f;
     float pitch = 0.615480f;
+};
+
+struct PreviewLight {
+    bool enabled = false;
+    int space = 0;
+    float hue = 30.f;
+    float sat = 0.7f;
+    float val = 1.f;
+    float intensity = 1.f;
 };
 
 inline LightGizmo light_gizmo_from_dir(const glm::vec3& dir) {
@@ -49,65 +59,22 @@ inline ImU32 color_u32(const glm::vec3& c, int a) {
     return IM_COL32(u8(c.x), u8(c.y), u8(c.z), a);
 }
 
-inline ImVec2 project_sphere(const glm::vec3& p, ImVec2 center, float R,
-    const glm::vec3& right, const glm::vec3& up)
-{
-    return ImVec2(center.x + glm::dot(p, right) * R,
-        center.y - glm::dot(p, up) * R);
+inline glm::vec3 hsv_to_rgb(float hue_deg, float s, float v) {
+    const float h = std::fmod(std::fmod(hue_deg, 360.f) + 360.f, 360.f) / 60.f;
+    const float c = v * s;
+    const float x = c * (1.f - std::fabs(std::fmod(h, 2.f) - 1.f));
+    const float m = v - c;
+    glm::vec3 rgb(0.f);
+    if (h < 1.f) rgb = { c, x, 0.f };
+    else if (h < 2.f) rgb = { x, c, 0.f };
+    else if (h < 3.f) rgb = { 0.f, c, x };
+    else if (h < 4.f) rgb = { 0.f, x, c };
+    else if (h < 5.f) rgb = { x, 0.f, c };
+    else rgb = { c, 0.f, x };
+    return rgb + glm::vec3(m);
 }
 
-inline void draw_great_circle(ImDrawList* dl, ImVec2 center, float R,
-    const glm::vec3& axis_a, const glm::vec3& axis_b,
-    const glm::vec3& right, const glm::vec3& up,
-    ImU32 col, float thickness)
-{
-    ImVec2 prev{};
-    bool has_prev = false;
-    for (int i = 0; i <= 96; ++i) {
-        const float t = float(i) / 96.f * glm::two_pi<float>();
-        const glm::vec3 p = axis_a * std::cos(t) + axis_b * std::sin(t);
-        const ImVec2 q = project_sphere(p, center, R, right, up);
-        if (has_prev)
-            dl->AddLine(prev, q, col, thickness);
-        prev = q;
-        has_prev = true;
-    }
-}
-
-inline float dist_point_seg(ImVec2 p, ImVec2 a, ImVec2 b) {
-    const ImVec2 ab(b.x - a.x, b.y - a.y);
-    const float len2 = ab.x * ab.x + ab.y * ab.y;
-    if (len2 < 1e-8f) {
-        const float dx = p.x - a.x;
-        const float dy = p.y - a.y;
-        return std::sqrt(dx * dx + dy * dy);
-    }
-    const float t = std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / len2, 0.f, 1.f);
-    const float dx = p.x - (a.x + ab.x * t);
-    const float dy = p.y - (a.y + ab.y * t);
-    return std::sqrt(dx * dx + dy * dy);
-}
-
-inline float dist_to_circle(ImVec2 mouse, ImVec2 center, float R,
-    const glm::vec3& axis_a, const glm::vec3& axis_b,
-    const glm::vec3& right, const glm::vec3& up)
-{
-    float best = 1e9f;
-    ImVec2 prev{};
-    bool has_prev = false;
-    for (int i = 0; i <= 96; ++i) {
-        const float t = float(i) / 96.f * glm::two_pi<float>();
-        const glm::vec3 p = axis_a * std::cos(t) + axis_b * std::sin(t);
-        const ImVec2 q = project_sphere(p, center, R, right, up);
-        if (has_prev)
-            best = std::min(best, dist_point_seg(mouse, prev, q));
-        prev = q;
-        has_prev = true;
-    }
-    return best;
-}
-
-inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float radius)
+inline void light_yaw_ring(const char* id, LightGizmo& g, const Light& light, float radius)
 {
     ImGui::PushID(id);
     const float box = radius * 2.f + 28.f;
@@ -115,79 +82,63 @@ inline void light_dir_sphere(const char* id, LightGizmo& g, Light& light, float 
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.f, (avail - box) * 0.5f));
 
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("sphere", ImVec2(box, box));
+    ImGui::InvisibleButton("yaw_ring", ImVec2(box, box));
     const ImVec2 center(cursor.x + box * 0.5f, cursor.y + box * 0.5f);
 
-    const glm::vec3 eye = glm::normalize(glm::vec3(-0.55f, 0.42f, 1.f));
-    glm::vec3 right = glm::normalize(glm::cross(glm::vec3(0.f, 1.f, 0.f), eye));
-    glm::vec3 up = glm::normalize(glm::cross(eye, right));
-
-    const glm::vec3 y_a(1.f, 0.f, 0.f);
-    const glm::vec3 y_b(0.f, 0.f, 1.f);
-    const glm::vec3 horiz(std::sin(g.yaw), 0.f, std::cos(g.yaw));
-    const glm::vec3 x_a = horiz;
-    const glm::vec3 x_b(0.f, 1.f, 0.f);
-
     const ImVec2 mouse = ImGui::GetIO().MousePos;
-    const float core_r = radius * 0.42f;
-    const float md_x = mouse.x - center.x;
-    const float md_y = mouse.y - center.y;
-    const bool on_core = (md_x * md_x + md_y * md_y) <= core_r * core_r;
+    const float mx = mouse.x - center.x;
+    const float my = mouse.y - center.y;
+    const float md = std::sqrt(mx * mx + my * my);
+    const bool on_ring = std::abs(md - radius) <= 8.f;
 
-    const float dist_x = dist_to_circle(mouse, center, radius, x_a, x_b, right, up);
-    const float dist_y = dist_to_circle(mouse, center, radius, y_a, y_b, right, up);
-    const float pick_px = 8.f;
-    int hover_ring = -1;
-    if (dist_x < pick_px || dist_y < pick_px)
-        hover_ring = (dist_x < dist_y) ? 0 : 1;
-
-    static int drag_ring = -1;
-    if (ImGui::IsItemActivated()) {
-        if (hover_ring >= 0)
-            drag_ring = hover_ring;
-        else if (on_core)
-            ImGui::OpenPopup("light_color");
-    }
+    static bool dragging = false;
+    if (ImGui::IsItemActivated() && on_ring)
+        dragging = true;
     if (!ImGui::IsItemActive())
-        drag_ring = -1;
+        dragging = false;
+    if (ImGui::IsItemActive() && dragging && md > 1.f)
+        g.yaw = std::atan2(mx, -my);
 
-    if (ImGui::IsItemActive() && drag_ring >= 0) {
-        const ImVec2 d = ImGui::GetIO().MouseDelta;
-        const float sens = 2.f / radius;
-        if (drag_ring == 1)
-            g.yaw += d.x * sens;
-        else
-            g.pitch = std::clamp(g.pitch - d.y * sens, -1.55f, 1.55f);
-    }
-
-    const int lit_ring = drag_ring >= 0 ? drag_ring : hover_ring;
+    const bool hot = dragging || on_ring;
+    const ImU32 ring_col = hot ? IM_COL32(255, 210, 40, 255) : IM_COL32(70, 150, 255, 255);
     const glm::vec3 col = glm::clamp(light.color, 0.f, 1.f);
-    const ImU32 ball = color_u32(col, 255);
-    const ImU32 ring_idle = IM_COL32(70, 150, 255, 255);
-    const ImU32 ring_hot = IM_COL32(255, 210, 40, 255);
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddCircleFilled(center, core_r, ball, 32);
-    dl->AddCircle(center, core_r, IM_COL32(255, 255, 255, 80), 32, 1.2f);
+    dl->AddCircleFilled(center, radius * 0.62f, ImGui::GetColorU32(ImVec4(0.729f, 0.741f, 0.764f, 1.f)), 32);
+    dl->AddCircle(center, radius, ring_col, 64, hot ? 3.2f : 2.f);
+    draw_sun_icon(dl,
+        ImVec2(center.x + std::sin(g.yaw) * radius, center.y - std::cos(g.yaw) * radius),
+        5.f, color_u32(col, 255));
 
-    const bool hi_y = lit_ring == 1;
-    const bool hi_x = lit_ring == 0;
-    const ImU32 col_y = hi_y ? ring_hot : ring_idle;
-    const ImU32 col_x = hi_x ? ring_hot : ring_idle;
-    draw_great_circle(dl, center, radius, y_a, y_b, right, up,
-        col_y, hi_y ? 3.2f : 2.f);
-    draw_great_circle(dl, center, radius, x_a, x_b, right, up,
-        col_x, hi_x ? 3.2f : 2.f);
+    ImGui::PopID();
+}
 
-    const glm::vec3 dir = light_dir_from_gizmo(g);
-    draw_sun_icon(dl, project_sphere(dir, center, radius, right, up), 5.f, ball);
+inline void draw_preview_light(int index, PreviewLight& L)
+{
+    ImGui::PushID(index);
+    char title[32];
+    std::snprintf(title, sizeof(title), "\xE5\x85\x89\xE7\xBA\xBF %d", index + 1);
+    if (ImGui::CollapsingHeader(title)) {
+        ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &L.enabled);
+        ImGui::BeginDisabled(!L.enabled);
 
-    if (ImGui::BeginPopup("light_color")) {
-        ImGui::ColorPicker3("##light_color", &light.color.x,
-            ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoSidePreview);
-        ImGui::EndPopup();
+        ImGui::RadioButton("RGB", &L.space, 0);
+        ImGui::SameLine();
+        ImGui::RadioButton("HSV", &L.space, 1);
+        ImGui::SameLine();
+        const glm::vec3 rgb = hsv_to_rgb(L.hue, L.sat, L.val);
+        if (L.space == 0)
+            ImGui::Text("%.2f, %.2f, %.2f", rgb.x, rgb.y, rgb.z);
+        else
+            ImGui::Text("%.0f, %.2f, %.2f", L.hue, L.sat, L.val);
+
+        ImGui::SliderFloat("\xE8\x89\xB2\xE8\xB0\x83", &L.hue, 0.f, 360.f, "%.0f");
+        ImGui::SliderFloat("\xE5\xBD\xA9\xE5\xBA\xA6", &L.sat, 0.f, 1.f, "%.2f");
+        ImGui::SliderFloat("\xE5\x80\xBC", &L.val, 0.f, 1.f, "%.2f");
+        ImGui::SliderFloat("\xE5\xBC\xBA\xE5\xBA\xA6", &L.intensity, 0.f, 10.f, "%.2f");
+
+        ImGui::EndDisabled();
     }
-
     ImGui::PopID();
 }
 
@@ -202,6 +153,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
     ImGui::SetNextWindowSize(ImVec2(panel_w, panel_h), ImGuiCond_Always);
 
     const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoCollapse |
@@ -211,10 +163,16 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
     if (ImGui::BeginTabBar("operate_tabs", ImGuiTabBarFlags_None)) {
         if (ImGui::BeginTabItem("light")) {
-            const float sphere_r = std::clamp((panel_w - 48.f) * 0.28f, 48.f, 72.f);
-            ImGui::TextUnformatted("direction");
-            light_dir_sphere("sun_sphere", gizmo, light, sphere_r);
-            light.dir = light_dir_from_gizmo(gizmo);
+            if (ImGui::CollapsingHeader("\xE5\x85\x89\xE6\xBA\x90\xE6\x97\x8B\xE8\xBD\xAC", ImGuiTreeNodeFlags_DefaultOpen)) {
+                const float ring_r = std::clamp((panel_w - 48.f) * 0.28f, 48.f, 72.f);
+                light_yaw_ring("sun_yaw", gizmo, light, ring_r);
+                light.dir = light_dir_from_gizmo(gizmo);
+            }
+
+            static PreviewLight preview_lights[5]{};
+            for (int i = 0; i < 5; ++i)
+                draw_preview_light(i, preview_lights[i]);
+
             ImGui::EndTabItem();
         }
 

@@ -2,6 +2,7 @@
 #include "core/actor.h"
 #include "core/ground.h"
 #include "core/light.h"
+#include "core/sh.h"
 #include "core/shaders/shader_code_0.h"
 #include "core/materials/material_0.h"
 #include "core/camera.h"
@@ -162,6 +163,8 @@ int main() {
     Ground ground;
     ground.init(floorY, 4.f);
 
+    const SH9 shAmbient = sh_irradiance_from_sky_ground(ambientColor, ambientColor * 0.25f);
+
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
@@ -187,7 +190,7 @@ int main() {
         actor.shader.setVec3f("lightDir", sun.dir);
         actor.shader.setVec3f("lightColor",
             sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
-        actor.shader.setVec3f("ambientColor", ambientColor);
+        actor.shader.setVec3Array("shIrradiance", shAmbient.c, 9);
 
         actor.draw();
 

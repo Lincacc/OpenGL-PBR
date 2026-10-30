@@ -33,11 +33,25 @@ const std::string fShaderCode = R"(
     uniform vec3 lightColor;  
     uniform vec3 albedo;        
     uniform vec3 matParams;     
-    uniform vec3 ambientColor;  
+    uniform vec3 shIrradiance[9];
 
     layout(location = 0) out vec4 fragColor;
 
     const float PI = 3.14159265359;
+
+    vec3 evalSHIrradiance(vec3 n) {
+        float x = n.x, y = n.y, z = n.z;
+        vec3 E = shIrradiance[0] * 0.2820947918;
+        E += shIrradiance[1] * (0.4886025119 * y);
+        E += shIrradiance[2] * (0.4886025119 * z);
+        E += shIrradiance[3] * (0.4886025119 * x);
+        E += shIrradiance[4] * (1.0925484306 * x * y);
+        E += shIrradiance[5] * (1.0925484306 * y * z);
+        E += shIrradiance[6] * (0.3153915653 * (3.0 * z * z - 1.0));
+        E += shIrradiance[7] * (1.0925484306 * x * z);
+        E += shIrradiance[8] * (0.5462742153 * (x * x - y * y));
+        return max(E, vec3(0.0));
+    }
 
     float D_GGX(float NdotH, float a) {
         float a2 = a * a;
@@ -84,7 +98,10 @@ const std::string fShaderCode = R"(
         vec3 diffuse = kD * albedo / PI;
 
         vec3 direct = (diffuse + spec) * lightColor * NdotL;
-        vec3 ambient = ambientColor * albedo * (1.0 - metallic) * ao;
+
+        vec3 F_ibl = F_Schlick(NdotV, F0);
+        vec3 kD_ibl = (1.0 - F_ibl) * (1.0 - metallic);
+        vec3 ambient = kD_ibl * albedo / PI * evalSHIrradiance(N) * ao;
 
         vec3 color = ambient + direct;
         color = color / (color + vec3(1.0));

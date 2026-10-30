@@ -23,6 +23,12 @@ struct Shader {
         glUniform3fv(glGetUniformLocation(programHandle, name.c_str()), 1, glm::value_ptr(vec));
     }
 
+    void setVec3Array(const std::string& name, const glm::vec3* vecs, int count) {
+        if (!vecs || count <= 0)
+            return;
+        glUniform3fv(glGetUniformLocation(programHandle, name.c_str()), count, glm::value_ptr(vecs[0]));
+    }
+
     void setVec2f(const std::string& name, const glm::vec2& vec) {
         glUniform2fv(glGetUniformLocation(programHandle, name.c_str()), 1, glm::value_ptr(vec));
     }

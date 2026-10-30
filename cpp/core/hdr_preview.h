@@ -12,6 +12,7 @@
 
 #include "shader_program.h"
 #include "shaders/shader_code_skybox.h"
+#include "sh.h"
 #include "skybox.h"
 
 #include <glad/glad.h>
@@ -271,7 +272,7 @@ inline GLuint hdr_bake_cubemap(GLuint equirect) {
     return cube;
 }
 
-inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, const std::wstring& path) {
+inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, SH9& dest_sh, const std::wstring& path) {
     if (path.empty())
         return "\xE8\xB7\xAF\xE5\xBE\x84\xE4\xB8\xBA\xE7\xA9\xBA";
 
@@ -379,6 +380,8 @@ inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, con
         }
     }
 
+    const SH9 baked = sh_irradiance_from_equirect(equirect_rgb.data(), ew, eh);
+
     GLuint equirect = 0;
     glCreateTextures(GL_TEXTURE_2D, 1, &equirect);
     if (equirect == 0) {
@@ -410,5 +413,6 @@ inline std::string hdr_environment_load(HdrPreview& dest, GLuint& dest_cube, con
     hdr_cube_destroy(dest_cube);
     dest = preview;
     dest_cube = cube;
+    dest_sh = baked;
     return {};
 }

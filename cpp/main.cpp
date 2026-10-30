@@ -172,14 +172,29 @@ int main() {
 
     SH9 shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
     glm::vec3 shSolidColor = environment.solidColor;
+    int shMode = 0;
+    GLuint shCube = 0;
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
     while (!glfwWindowShouldClose(window)) {
-        if (environment.solidColor != shSolidColor) {
+        if (environment.mode == 0) {
+            if (shMode != 0 || environment.solidColor != shSolidColor) {
+                shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
+                shSolidColor = environment.solidColor;
+                shMode = 0;
+            }
+        } else if (environment.envCube != 0) {
+            if (shMode != 1 || shCube != environment.envCube) {
+                shAmbient = environment.hdrSh;
+                shCube = environment.envCube;
+                shMode = 1;
+            }
+        } else if (shMode != 0) {
             shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
             shSolidColor = environment.solidColor;
+            shMode = 0;
         }
         ambientColor = environment.solidColor;
         glfwPollEvents();

@@ -4,6 +4,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include <cmath>
+#include <cstddef>
 
 // 2 阶实球谐，世界空间 Y 朝上。系数顺序与 shader_code_0.h 的 evalSHIrradiance 一致：
 // 0:L00  1:L1-1(y)  2:L10(z)  3:L11(x)
@@ -79,6 +80,43 @@ inline SH9 sh_irradiance_from_sky_ground(const glm::vec3& sky, const glm::vec3& 
             sh_basis(w, y);
             for (int i = 0; i < 9; ++i)
                 radiance.c[i] += L * y[i] * d_omega;
+        }
+    }
+    return sh_radiance_to_irradiance(radiance);
+}
+
+// 等距柱状图约定与 shader_code_skybox.h 的 sampleEquirect 一致：
+// v=0 为 +Y，v=1 为 -Y；u=0.5 为 +X。rgb 为线性 RGB 交错。
+inline SH9 sh_irradiance_from_equirect(const float* rgb, int w, int h) {
+    SH9 radiance{};
+    if (rgb == nullptr || w <= 0 || h <= 0)
+        return radiance;
+
+    const float du = 2.f * glm::pi<float>() / float(w);
+    const float dv = glm::pi<float>() / float(h);
+
+    for (int y = 0; y < h; ++y) {
+        const float v = (float(y) + 0.5f) / float(h);
+        const float theta = v * glm::pi<float>();
+        const float sin_t = std::sin(theta);
+        const float cos_t = std::cos(theta);
+        const float d_omega = sin_t * du * dv;
+        if (d_omega <= 0.f)
+            continue;
+        for (int x = 0; x < w; ++x) {
+            const float u = (float(x) + 0.5f) / float(w);
+            const float phi = (u - 0.5f) * 2.f * glm::pi<float>();
+            const glm::vec3 dir{
+                sin_t * std::cos(phi),
+                cos_t,
+                sin_t * std::sin(phi)
+            };
+            const float* p = rgb + (size_t(y) * size_t(w) + size_t(x)) * 3;
+            const glm::vec3 L(p[0], p[1], p[2]);
+            float basis[9];
+            sh_basis(dir, basis);
+            for (int i = 0; i < 9; ++i)
+                radiance.c[i] += L * basis[i] * d_omega;
         }
     }
     return sh_radiance_to_irradiance(radiance);

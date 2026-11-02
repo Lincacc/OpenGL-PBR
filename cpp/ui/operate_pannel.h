@@ -246,7 +246,8 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 }
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
-    Material& material, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao)
+    Material& material, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao,
+    float& exposure)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -284,6 +285,10 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
                 draw_preview_light(i, preview_lights[i]);
 
             draw_environment_panel(env);
+
+            if (ImGui::CollapsingHeader("exposure")) {
+                ImGui::SliderFloat("EV", &exposure, -4.f, 4.f, "%.1f");
+            }
 
             if (ImGui::CollapsingHeader("SSAO")) {
                 ImGui::Checkbox("enabled", &ssao.enabled);

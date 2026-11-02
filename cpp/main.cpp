@@ -31,6 +31,7 @@ LightGizmo sun_gizmo;
 Light sun;
 EnvironmentSettings environment;
 glm::vec3 ambientColor = environment.solidColor;
+float exposure = 0.f;
 
 Camera camera;
 float orbitYaw = 0.f;
@@ -96,7 +97,6 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_SAMPLES, 8);  // 8x MSAA
 
     GLFWwindow* window = glfwCreateWindow(width, height, "OpenGL PBR", nullptr, nullptr);
     glfwMakeContextCurrent(window);
@@ -236,7 +236,7 @@ int main() {
         if (ssao.w != width || ssao.h != height)
             ssao.create(width, height);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
         glViewport(0, 0, width, height);
         glEnable(GL_DEPTH_TEST);
         const float clear_direct[4] = {
@@ -284,6 +284,7 @@ int main() {
         if (environment.mode == 1 && environment.envCube != 0)
             skybox.draw(v, p, environment.envCube);
 
+        hdrTarget.resolve();
         ssao.draw(hdrTarget.depth, p, quad);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -295,6 +296,7 @@ int main() {
         tonemap.setInt("ssaoMap", 2);
         tonemap.setInt("ssaoEnabled", ssao.enabled ? 1 : 0);
         tonemap.setFloat("ssaoStrength", ssao.strength);
+        tonemap.setFloat("exposure", exposure);
         glBindTextureUnit(0, hdrTarget.tex);
         glBindTextureUnit(1, hdrTarget.texIbl);
         glBindTextureUnit(2, ssao.blurred);
@@ -305,7 +307,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment, ssao);
+        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment, ssao, exposure);
 
 #pragma region memory usage
         auto usage = host_usage();

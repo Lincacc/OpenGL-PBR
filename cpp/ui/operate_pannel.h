@@ -306,48 +306,64 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
         if (ImGui::BeginTabItem("material")) {
             ImGui::PushID(0);
-            bool use0 = (materialId == 0);
-            if (ImGui::Checkbox("standard", &use0) && use0)
-                materialId = 0;
-            ImGui::ColorEdit3("albedo", &material.albedo.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("metallic", &material.metallic, 0.f, 1.f);
-            ImGui::SliderFloat("roughness", &material.roughness, 0.045f, 1.f);
+            if (ImGui::CollapsingHeader("standard", ImGuiTreeNodeFlags_DefaultOpen)) {
+                bool use0 = (materialId == 0);
+                if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use0) && use0)
+                    materialId = 0;
+                ImGui::BeginDisabled(materialId != 0);
+                ImGui::ColorEdit3("albedo", &material.albedo.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("metallic", &material.metallic, 0.f, 1.f);
+                ImGui::SliderFloat("roughness", &material.roughness, 0.045f, 1.f);
+                ImGui::EndDisabled();
+            }
             ImGui::PopID();
 
             ImGui::PushID(1);
-            bool use1 = (materialId == 1);
-            if (ImGui::Checkbox("clearcoat##select", &use1) && use1)
-                materialId = 1;
-            ImGui::ColorEdit3("albedo", &material1.albedo.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("metallic", &material1.metallic, 0.f, 1.f);
-            ImGui::SliderFloat("roughness", &material1.roughness, 0.045f, 1.f);
-            ImGui::SliderFloat("specular", &material1.specular, 0.f, 1.f);
-            ImGui::SliderFloat("clearcoat##amount", &material1.clearcoat, 0.f, 1.f);
-            ImGui::SliderFloat("clearcoatRoughness", &material1.clearcoatRoughness, 0.045f, 1.f);
+            if (ImGui::CollapsingHeader("clearcoat")) {
+                bool use1 = (materialId == 1);
+                if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use1) && use1)
+                    materialId = 1;
+                ImGui::BeginDisabled(materialId != 1);
+                ImGui::ColorEdit3("albedo", &material1.albedo.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("metallic", &material1.metallic, 0.f, 1.f);
+                ImGui::SliderFloat("roughness", &material1.roughness, 0.045f, 1.f);
+                ImGui::SliderFloat("specular", &material1.specular, 0.f, 1.f);
+                ImGui::SliderFloat("clearcoat##amount", &material1.clearcoat, 0.f, 1.f);
+                ImGui::SliderFloat("clearcoatRoughness", &material1.clearcoatRoughness, 0.045f, 1.f);
+                ImGui::EndDisabled();
+            }
             ImGui::PopID();
 
             ImGui::PushID(2);
-            bool use2 = (materialId == 2);
-            if (ImGui::Checkbox("transmission##select", &use2) && use2)
-                materialId = 2;
-            ImGui::ColorEdit3("albedo", &material2.albedo.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("roughness", &material2.roughness, 0.045f, 1.f);
-            ImGui::SliderFloat("ior", &material2.ior, 1.01f, 2.5f);
-            ImGui::SliderFloat("transmission##amount", &material2.transmission, 0.f, 1.f);
-            ImGui::ColorEdit3("attenuationColor", &material2.attenuationColor.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("attenuationDistance", &material2.attenuationDistance, 0.02f, 4.f);
+            if (ImGui::CollapsingHeader("transmission")) {
+                bool use2 = (materialId == 2);
+                if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use2) && use2)
+                    materialId = 2;
+                ImGui::BeginDisabled(materialId != 2);
+                ImGui::ColorEdit3("albedo", &material2.albedo.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("roughness", &material2.roughness, 0.045f, 1.f);
+                ImGui::SliderFloat("ior", &material2.ior, 1.01f, 2.5f);
+                ImGui::SliderFloat("transmission##amount", &material2.transmission, 0.f, 1.f);
+                ImGui::ColorEdit3("attenuationColor", &material2.attenuationColor.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("attenuationDistance", &material2.attenuationDistance, 0.02f, 4.f);
+                ImGui::EndDisabled();
+            }
             ImGui::PopID();
 
             ImGui::PushID(3);
-            bool use3 = (materialId == 3);
-            if (ImGui::Checkbox("subsurface##select", &use3) && use3)
-                materialId = 3;
-            ImGui::ColorEdit3("albedo", &material3.albedo.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("metallic", &material3.metallic, 0.f, 1.f);
-            ImGui::SliderFloat("roughness", &material3.roughness, 0.045f, 1.f);
-            ImGui::SliderFloat("specular", &material3.specular, 0.f, 1.f);
-            ImGui::ColorEdit3("subsurfaceColor", &material3.subsurfaceColor.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("opacity", &material3.opacity, 0.f, 1.f);
+            if (ImGui::CollapsingHeader("subsurface")) {
+                bool use3 = (materialId == 3);
+                if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use3) && use3)
+                    materialId = 3;
+                ImGui::BeginDisabled(materialId != 3);
+                ImGui::ColorEdit3("albedo", &material3.albedo.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("metallic", &material3.metallic, 0.f, 1.f);
+                ImGui::SliderFloat("roughness", &material3.roughness, 0.045f, 1.f);
+                ImGui::SliderFloat("specular", &material3.specular, 0.f, 1.f);
+                ImGui::ColorEdit3("subsurfaceColor", &material3.subsurfaceColor.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("opacity", &material3.opacity, 0.f, 1.f);
+                ImGui::EndDisabled();
+            }
             ImGui::PopID();
             ImGui::EndTabItem();
         }

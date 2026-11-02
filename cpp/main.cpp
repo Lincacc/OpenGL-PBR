@@ -176,6 +176,7 @@ int main() {
     actor.material1.albedo = glm::vec3(1, 0, 1);
     actor.material1.metallic = 0.f;
     actor.material1.roughness = 0.3f;
+    actor.material1.specular = 0.5f;
     actor.material1.clearcoat = 1.f;
     actor.material1.clearcoatRoughness = 0.1f;
     actor.material2.albedo = glm::vec3(1.f);

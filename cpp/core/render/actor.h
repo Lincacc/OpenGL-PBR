@@ -100,6 +100,7 @@ struct Actor {
             sh.setVec3f("albedo", material1.albedo);
             sh.setFloat("metallic", material1.metallic);
             sh.setFloat("roughness", material1.roughness);
+            sh.setFloat("specular", material1.specular);
             sh.setFloat("clearcoat", material1.clearcoat);
             sh.setFloat("clearcoatRoughness", material1.clearcoatRoughness);
         } else if (materialId == 2) {

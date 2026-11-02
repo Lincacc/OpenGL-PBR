@@ -321,6 +321,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             ImGui::ColorEdit3("albedo", &material1.albedo.x, ImGuiColorEditFlags_Float);
             ImGui::SliderFloat("metallic", &material1.metallic, 0.f, 1.f);
             ImGui::SliderFloat("roughness", &material1.roughness, 0.045f, 1.f);
+            ImGui::SliderFloat("specular", &material1.specular, 0.f, 1.f);
             ImGui::SliderFloat("clearcoat##amount", &material1.clearcoat, 0.f, 1.f);
             ImGui::SliderFloat("clearcoatRoughness", &material1.clearcoatRoughness, 0.045f, 1.f);
             ImGui::PopID();

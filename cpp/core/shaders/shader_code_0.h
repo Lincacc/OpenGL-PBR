@@ -77,6 +77,13 @@ const std::string fShaderCode = R"(
         return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
     }
 
+    float Fd_Burley(float NdotV, float NdotL, float LdotH, float roughness) {
+        float f90 = 0.5 + 2.0 * LdotH * LdotH * roughness;
+        float lightScatter = 1.0 + (f90 - 1.0) * pow(clamp(1.0 - NdotL, 0.0, 1.0), 5.0);
+        float viewScatter  = 1.0 + (f90 - 1.0) * pow(clamp(1.0 - NdotV, 0.0, 1.0), 5.0);
+        return lightScatter * viewScatter / PI;
+    }
+
     void main() {
         vec3 N = normalize(vNormal);
         vec3 V = normalize(cameraPos - vWorldPos);
@@ -100,7 +107,7 @@ const std::string fShaderCode = R"(
         vec3  spec = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
 
         vec3 kD = (1.0 - F) * (1.0 - metal);
-        vec3 diffuse = kD * albedo / PI;
+        vec3 diffuse = kD * albedo * Fd_Burley(NdotV, NdotL, VdotH, rough);
 
         vec3 direct = (diffuse + spec) * lightColor * NdotL;
 

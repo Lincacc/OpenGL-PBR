@@ -9,8 +9,10 @@
 #include "core/render/ibl.h"
 #include "core/render/sh.h"
 #include "core/shaders/shader_code_0.h"
+#include "core/shaders/shader_code_1.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
+#include "core/materials/material_1.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
 
@@ -156,10 +158,16 @@ int main() {
 
     Actor actor;
     actor.shader.compile(vShaderCode, fShaderCode);
+    actor.shader1.compile(vShaderCode1, fShaderCode1);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
     actor.material.roughness = 0.1f;
+    actor.material1.albedo = glm::vec3(1, 0, 1);
+    actor.material1.metallic = 0.f;
+    actor.material1.roughness = 0.3f;
+    actor.material1.clearcoat = 1.f;
+    actor.material1.clearcoatRoughness = 0.1f;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);
@@ -252,17 +260,18 @@ int main() {
 
         ground.draw(v, p, ambientColor, aoCenter, aoRadius);
 
-        actor.shader.bind();
-        actor.shader.setMatrix4("viewMatrix", v);
-        actor.shader.setMatrix4("projectionMatrix", p);
-        actor.shader.setVec3f("cameraPos", camera.position);
+        Shader& sh = actor.active_shader();
+        sh.bind();
+        sh.setMatrix4("viewMatrix", v);
+        sh.setMatrix4("projectionMatrix", p);
+        sh.setVec3f("cameraPos", camera.position);
 
-        actor.shader.setVec3f("lightDir", sun.dir);
-        actor.shader.setVec3f("lightColor",
+        sh.setVec3f("lightDir", sun.dir);
+        sh.setVec3f("lightColor",
             sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
-        actor.shader.setVec3Array("shIrradiance", shAmbient.c, 9);
-        actor.shader.setInt("prefilterMap", 1);
-        actor.shader.setInt("brdfLut", 2);
+        sh.setVec3Array("shIrradiance", shAmbient.c, 9);
+        sh.setInt("prefilterMap", 1);
+        sh.setInt("brdfLut", 2);
         GLuint spec_map = 0;
         float spec_lod = kIblPrefilterMaxLod;
         if (environment.mode == 1 && environment.prefilterCube != 0) {
@@ -272,9 +281,9 @@ int main() {
             spec_map = solidPrefilter;
             spec_lod = kIblSolidPrefilterMaxLod;
         }
-        actor.shader.setFloat("prefilterMaxLod", spec_lod);
+        sh.setFloat("prefilterMaxLod", spec_lod);
         const bool spec_ibl = spec_map != 0 && brdfLut != 0;
-        actor.shader.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
+        sh.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
         if (spec_ibl)
             glBindTextureUnit(1, spec_map);
         glBindTextureUnit(2, brdfLut);
@@ -307,7 +316,8 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment, ssao, exposure);
+        draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
+            actor.material1, actor.mesh, environment, ssao, exposure);
 
 #pragma region memory usage
         auto usage = host_usage();

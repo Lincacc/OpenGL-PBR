@@ -3,6 +3,7 @@
 #include "core/shader_program.h"
 #include "core/obj_loader.h"
 #include "core/materials/material_0.h"
+#include "core/materials/material_1.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -16,11 +17,18 @@ struct Vertex {
 
 struct Actor {
     Shader shader;
+    Shader shader1;
     ObjMesh mesh;
     Material material;
+    Material1 material1;
+    int materialId = 0;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
+
+    Shader& active_shader() {
+        return materialId == 0 ? shader : shader1;
+    }
 
     void init() {
         if (mesh.positions.empty() || mesh.indices.empty()) {
@@ -70,9 +78,18 @@ struct Actor {
     }
 
     void draw() {
-        shader.setVec3f("albedo", material.albedo);
-        shader.setFloat("metallic", material.metallic);
-        shader.setFloat("roughness", material.roughness);
+        Shader& sh = active_shader();
+        if (materialId == 0) {
+            sh.setVec3f("albedo", material.albedo);
+            sh.setFloat("metallic", material.metallic);
+            sh.setFloat("roughness", material.roughness);
+        } else {
+            sh.setVec3f("albedo", material1.albedo);
+            sh.setFloat("metallic", material1.metallic);
+            sh.setFloat("roughness", material1.roughness);
+            sh.setFloat("clearcoat", material1.clearcoat);
+            sh.setFloat("clearcoatRoughness", material1.clearcoatRoughness);
+        }
 
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);

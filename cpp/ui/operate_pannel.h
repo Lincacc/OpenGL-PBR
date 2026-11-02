@@ -4,6 +4,7 @@
 #include "core/render/ssao.h"
 #include "core/light.h"
 #include "core/materials/material_0.h"
+#include "core/materials/material_1.h"
 #include "core/obj_loader.h"
 
 #include <imgui.h>
@@ -246,8 +247,8 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 }
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
-    Material& material, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao,
-    float& exposure)
+    int& materialId, Material& material, Material1& material1, const ObjMesh& mesh,
+    EnvironmentSettings& env, Ssao& ssao, float& exposure)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -302,9 +303,25 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
         }
 
         if (ImGui::BeginTabItem("material")) {
+            ImGui::PushID(0);
+            bool use0 = (materialId == 0);
+            if (ImGui::Checkbox("standard", &use0) && use0)
+                materialId = 0;
             ImGui::ColorEdit3("albedo", &material.albedo.x, ImGuiColorEditFlags_Float);
             ImGui::SliderFloat("metallic", &material.metallic, 0.f, 1.f);
             ImGui::SliderFloat("roughness", &material.roughness, 0.045f, 1.f);
+            ImGui::PopID();
+
+            ImGui::PushID(1);
+            bool use1 = (materialId == 1);
+            if (ImGui::Checkbox("clearcoat##select", &use1) && use1)
+                materialId = 1;
+            ImGui::ColorEdit3("albedo", &material1.albedo.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("metallic", &material1.metallic, 0.f, 1.f);
+            ImGui::SliderFloat("roughness", &material1.roughness, 0.045f, 1.f);
+            ImGui::SliderFloat("clearcoat##amount", &material1.clearcoat, 0.f, 1.f);
+            ImGui::SliderFloat("clearcoatRoughness", &material1.clearcoatRoughness, 0.045f, 1.f);
+            ImGui::PopID();
             ImGui::EndTabItem();
         }
 

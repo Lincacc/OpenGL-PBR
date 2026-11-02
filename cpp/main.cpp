@@ -241,31 +241,9 @@ int main() {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_MULTISAMPLE);
 
+    const glm::vec3 inspectGray(0.878f, 0.89f, 0.921f);
+
     while (!glfwWindowShouldClose(window)) {
-        if (environment.mode == 0) {
-            if (shMode != 0 || environment.solidColor != shSolidColor) {
-                shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
-                shSolidColor = environment.solidColor;
-                shMode = 0;
-                ibl_texture_destroy(solidPrefilter);
-                solidPrefilter = ibl_solid_prefilter_create(
-                    environment.solidColor, environment.solidColor * 0.25f);
-            }
-        } else if (environment.envCube != 0) {
-            if (shMode != 1 || shCube != environment.envCube) {
-                shAmbient = environment.hdrSh;
-                shCube = environment.envCube;
-                shMode = 1;
-            }
-        } else if (shMode != 0) {
-            shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
-            shSolidColor = environment.solidColor;
-            shMode = 0;
-            ibl_texture_destroy(solidPrefilter);
-            solidPrefilter = ibl_solid_prefilter_create(
-                environment.solidColor, environment.solidColor * 0.25f);
-        }
-        ambientColor = environment.solidColor;
         glfwPollEvents();
         glfwGetFramebufferSize(window, &width, &height);
         if (width <= 0 || height <= 0)
@@ -274,112 +252,6 @@ int main() {
         camera.aspect = float(width) / float(height);
         const auto& v = camera.view();
         const auto& p = camera.project();
-
-        if (hdrTarget.w != width || hdrTarget.h != height)
-            hdrTarget.create(width, height);
-        if (volumeDepth.w != width || volumeDepth.h != height)
-            volumeDepth.create(width, height);
-        if (ssao.w != width || ssao.h != height)
-            ssao.create(width, height);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
-        glViewport(0, 0, width, height);
-        glEnable(GL_DEPTH_TEST);
-        const float clear_direct[4] = {
-            environment.mode == 1 ? 0.f : ambientColor.r,
-            environment.mode == 1 ? 0.f : ambientColor.g,
-            environment.mode == 1 ? 0.f : ambientColor.b,
-            1.f
-        };
-        const float clear_ibl[4] = { 0.f, 0.f, 0.f, 0.f };
-        glClearBufferfv(GL_COLOR, 0, clear_direct);
-        glClearBufferfv(GL_COLOR, 1, clear_ibl);
-        glClear(GL_DEPTH_BUFFER_BIT);
-
-        ground.draw(v, p, ambientColor, aoCenter, aoRadius);
-
-        if (environment.mode == 1 && environment.envCube != 0)
-            skybox.draw(v, p, environment.envCube);
-
-        const bool glass = actor.materialId == 2 && !actor.meshInspect;
-        if (glass) {
-            hdrTarget.resolve();
-
-            glBindFramebuffer(GL_FRAMEBUFFER, volumeDepth.fbo);
-            glViewport(0, 0, width, height);
-            glClear(GL_DEPTH_BUFFER_BIT);
-            glEnable(GL_CULL_FACE);
-            glCullFace(GL_FRONT);
-            actor.shader2Depth.bind();
-            actor.shader2Depth.setMatrix4("viewMatrix", v);
-            actor.shader2Depth.setMatrix4("projectionMatrix", p);
-            actor.draw_geometry();
-
-            glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
-            glViewport(0, 0, width, height);
-            glCullFace(GL_BACK);
-        }
-
-        Shader& sh = actor.active_shader();
-        sh.bind();
-        sh.setMatrix4("viewMatrix", v);
-        sh.setMatrix4("projectionMatrix", p);
-        sh.setVec3f("cameraPos", camera.position);
-
-        sh.setVec3f("lightDir", sun.dir);
-        sh.setVec3f("lightColor",
-            sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
-        sh.setVec3Array("shIrradiance", shAmbient.c, 9);
-        sh.setInt("prefilterMap", 1);
-        sh.setInt("brdfLut", 2);
-        GLuint spec_map = 0;
-        float spec_lod = kIblPrefilterMaxLod;
-        if (environment.mode == 1 && environment.prefilterCube != 0) {
-            spec_map = environment.prefilterCube;
-            spec_lod = kIblPrefilterMaxLod;
-        } else if (environment.mode == 0 && solidPrefilter != 0) {
-            spec_map = solidPrefilter;
-            spec_lod = kIblSolidPrefilterMaxLod;
-        }
-        sh.setFloat("prefilterMaxLod", spec_lod);
-        const bool spec_ibl = spec_map != 0 && brdfLut != 0;
-        sh.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
-        if (spec_ibl)
-            glBindTextureUnit(1, spec_map);
-        glBindTextureUnit(2, brdfLut);
-        if (glass) {
-            sh.setInt("sceneDirect", 3);
-            sh.setInt("sceneIbl", 4);
-            sh.setInt("backDepth", 5);
-            sh.setInt("sceneSampleEnabled", 1);
-            sh.setMatrix4("invViewProj", glm::inverse(p * v));
-            glBindTextureUnit(3, hdrTarget.tex);
-            glBindTextureUnit(4, hdrTarget.texIbl);
-            glBindTextureUnit(5, volumeDepth.depth);
-        }
-
-        actor.draw();
-        if (glass)
-            glDisable(GL_CULL_FACE);
-
-        hdrTarget.resolve();
-        ssao.draw(hdrTarget.depth, p, quad);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, width, height);
-        glDisable(GL_DEPTH_TEST);
-        tonemap.bind();
-        tonemap.setInt("directMap", 0);
-        tonemap.setInt("iblMap", 1);
-        tonemap.setInt("ssaoMap", 2);
-        tonemap.setInt("ssaoEnabled", ssao.enabled ? 1 : 0);
-        tonemap.setFloat("ssaoStrength", ssao.strength);
-        tonemap.setFloat("exposure", exposure);
-        glBindTextureUnit(0, hdrTarget.tex);
-        glBindTextureUnit(1, hdrTarget.texIbl);
-        glBindTextureUnit(2, ssao.blurred);
-        quad.draw();
-        glEnable(GL_DEPTH_TEST);
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -397,6 +269,173 @@ int main() {
         draw_list->AddText(ImVec2(9.f, 9.f), IM_COL32(0, 0, 0, 180), text);
         draw_list->AddText(ImVec2(8.f, 8.f), IM_COL32(255, 255, 255, 255), text);
 #pragma endregion
+
+        if (hdrTarget.w != width || hdrTarget.h != height)
+            hdrTarget.create(width, height);
+
+        if (actor.meshInspect) {
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
+            glViewport(0, 0, width, height);
+            glEnable(GL_DEPTH_TEST);
+            const float clear_direct[4] = { inspectGray.r, inspectGray.g, inspectGray.b, 1.f };
+            const float clear_ibl[4] = { 0.f, 0.f, 0.f, 0.f };
+            glClearBufferfv(GL_COLOR, 0, clear_direct);
+            glClearBufferfv(GL_COLOR, 1, clear_ibl);
+            glClear(GL_DEPTH_BUFFER_BIT);
+
+            ground.draw(v, p, inspectGray, aoCenter, aoRadius);
+
+            Shader& sh = actor.active_shader();
+            sh.bind();
+            sh.setMatrix4("viewMatrix", v);
+            sh.setMatrix4("projectionMatrix", p);
+            sh.setVec3f("cameraPos", camera.position);
+            actor.draw();
+
+            hdrTarget.resolve();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, width, height);
+            glDisable(GL_DEPTH_TEST);
+            tonemap.bind();
+            tonemap.setInt("directMap", 0);
+            tonemap.setInt("iblMap", 1);
+            tonemap.setInt("ssaoEnabled", 0);
+            tonemap.setFloat("exposure", 0.f);
+            glBindTextureUnit(0, hdrTarget.tex);
+            glBindTextureUnit(1, hdrTarget.texIbl);
+            quad.draw();
+            glEnable(GL_DEPTH_TEST);
+        } else {
+            if (environment.mode == 0) {
+                if (shMode != 0 || environment.solidColor != shSolidColor) {
+                    shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
+                    shSolidColor = environment.solidColor;
+                    shMode = 0;
+                    ibl_texture_destroy(solidPrefilter);
+                    solidPrefilter = ibl_solid_prefilter_create(
+                        environment.solidColor, environment.solidColor * 0.25f);
+                }
+            } else if (environment.envCube != 0) {
+                if (shMode != 1 || shCube != environment.envCube) {
+                    shAmbient = environment.hdrSh;
+                    shCube = environment.envCube;
+                    shMode = 1;
+                }
+            } else if (shMode != 0) {
+                shAmbient = sh_irradiance_from_sky_ground(environment.solidColor, environment.solidColor * 0.25f);
+                shSolidColor = environment.solidColor;
+                shMode = 0;
+                ibl_texture_destroy(solidPrefilter);
+                solidPrefilter = ibl_solid_prefilter_create(
+                    environment.solidColor, environment.solidColor * 0.25f);
+            }
+            ambientColor = environment.solidColor;
+
+            if (volumeDepth.w != width || volumeDepth.h != height)
+                volumeDepth.create(width, height);
+            if (ssao.w != width || ssao.h != height)
+                ssao.create(width, height);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
+            glViewport(0, 0, width, height);
+            glEnable(GL_DEPTH_TEST);
+            const float clear_direct[4] = {
+                environment.mode == 1 ? 0.f : ambientColor.r,
+                environment.mode == 1 ? 0.f : ambientColor.g,
+                environment.mode == 1 ? 0.f : ambientColor.b,
+                1.f
+            };
+            const float clear_ibl[4] = { 0.f, 0.f, 0.f, 0.f };
+            glClearBufferfv(GL_COLOR, 0, clear_direct);
+            glClearBufferfv(GL_COLOR, 1, clear_ibl);
+            glClear(GL_DEPTH_BUFFER_BIT);
+
+            ground.draw(v, p, ambientColor, aoCenter, aoRadius);
+
+            if (environment.mode == 1 && environment.envCube != 0)
+                skybox.draw(v, p, environment.envCube);
+
+            const bool glass = actor.materialId == 2;
+            if (glass) {
+                hdrTarget.resolve();
+
+                glBindFramebuffer(GL_FRAMEBUFFER, volumeDepth.fbo);
+                glViewport(0, 0, width, height);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_CULL_FACE);
+                glCullFace(GL_FRONT);
+                actor.shader2Depth.bind();
+                actor.shader2Depth.setMatrix4("viewMatrix", v);
+                actor.shader2Depth.setMatrix4("projectionMatrix", p);
+                actor.draw_geometry();
+
+                glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
+                glViewport(0, 0, width, height);
+                glCullFace(GL_BACK);
+            }
+
+            Shader& sh = actor.active_shader();
+            sh.bind();
+            sh.setMatrix4("viewMatrix", v);
+            sh.setMatrix4("projectionMatrix", p);
+            sh.setVec3f("cameraPos", camera.position);
+
+            sh.setVec3f("lightDir", sun.dir);
+            sh.setVec3f("lightColor",
+                sun.enabled ? sun.color * sun.intensity : glm::vec3(0.f));
+            sh.setVec3Array("shIrradiance", shAmbient.c, 9);
+            sh.setInt("prefilterMap", 1);
+            sh.setInt("brdfLut", 2);
+            GLuint spec_map = 0;
+            float spec_lod = kIblPrefilterMaxLod;
+            if (environment.mode == 1 && environment.prefilterCube != 0) {
+                spec_map = environment.prefilterCube;
+                spec_lod = kIblPrefilterMaxLod;
+            } else if (environment.mode == 0 && solidPrefilter != 0) {
+                spec_map = solidPrefilter;
+                spec_lod = kIblSolidPrefilterMaxLod;
+            }
+            sh.setFloat("prefilterMaxLod", spec_lod);
+            const bool spec_ibl = spec_map != 0 && brdfLut != 0;
+            sh.setInt("iblSpecEnabled", spec_ibl ? 1 : 0);
+            if (spec_ibl)
+                glBindTextureUnit(1, spec_map);
+            glBindTextureUnit(2, brdfLut);
+            if (glass) {
+                sh.setInt("sceneDirect", 3);
+                sh.setInt("sceneIbl", 4);
+                sh.setInt("backDepth", 5);
+                sh.setInt("sceneSampleEnabled", 1);
+                sh.setMatrix4("invViewProj", glm::inverse(p * v));
+                glBindTextureUnit(3, hdrTarget.tex);
+                glBindTextureUnit(4, hdrTarget.texIbl);
+                glBindTextureUnit(5, volumeDepth.depth);
+            }
+
+            actor.draw();
+            if (glass)
+                glDisable(GL_CULL_FACE);
+
+            hdrTarget.resolve();
+            ssao.draw(hdrTarget.depth, p, quad);
+
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            glViewport(0, 0, width, height);
+            glDisable(GL_DEPTH_TEST);
+            tonemap.bind();
+            tonemap.setInt("directMap", 0);
+            tonemap.setInt("iblMap", 1);
+            tonemap.setInt("ssaoMap", 2);
+            tonemap.setInt("ssaoEnabled", ssao.enabled ? 1 : 0);
+            tonemap.setFloat("ssaoStrength", ssao.strength);
+            tonemap.setFloat("exposure", exposure);
+            glBindTextureUnit(0, hdrTarget.tex);
+            glBindTextureUnit(1, hdrTarget.texIbl);
+            glBindTextureUnit(2, ssao.blurred);
+            quad.draw();
+            glEnable(GL_DEPTH_TEST);
+        }
 
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

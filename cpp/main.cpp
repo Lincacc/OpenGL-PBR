@@ -24,6 +24,8 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <glm/gtc/matrix_inverse.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -55,6 +57,7 @@ static void apply_orbit() {
 
 FullscreenQuad quad;
 ColorTarget hdrTarget;
+VolumeDepth volumeDepth;
 Ssao ssao;
 Shader tonemap;
 
@@ -162,6 +165,7 @@ int main() {
     actor.shader.compile(vShaderCode, fShaderCode);
     actor.shader1.compile(vShaderCode1, fShaderCode1);
     actor.shader2.compile(vShaderCode2, fShaderCode2);
+    actor.shader2Depth.compile(vShaderCode2, fShaderCode2Depth);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
@@ -175,6 +179,8 @@ int main() {
     actor.material2.roughness = 0.045f;
     actor.material2.ior = 1.5f;
     actor.material2.transmission = 1.f;
+    actor.material2.attenuationColor = glm::vec3(0.75f, 0.93f, 0.82f);
+    actor.material2.attenuationDistance = 0.45f;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);
@@ -196,6 +202,7 @@ int main() {
     quad.create();
     tonemap.compile(vTonemapShaderCode, fTonemapShaderCode);
     hdrTarget.create(width, height);
+    volumeDepth.create(width, height);
     ssao.create(width, height);
 
     GLuint brdfLut = ibl_brdf_lut_create();
@@ -248,6 +255,8 @@ int main() {
 
         if (hdrTarget.w != width || hdrTarget.h != height)
             hdrTarget.create(width, height);
+        if (volumeDepth.w != width || volumeDepth.h != height)
+            volumeDepth.create(width, height);
         if (ssao.w != width || ssao.h != height)
             ssao.create(width, height);
 
@@ -273,8 +282,20 @@ int main() {
         const bool glass = actor.materialId == 2;
         if (glass) {
             hdrTarget.resolve();
+
+            glBindFramebuffer(GL_FRAMEBUFFER, volumeDepth.fbo);
+            glViewport(0, 0, width, height);
+            glClear(GL_DEPTH_BUFFER_BIT);
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_FRONT);
+            actor.shader2Depth.bind();
+            actor.shader2Depth.setMatrix4("viewMatrix", v);
+            actor.shader2Depth.setMatrix4("projectionMatrix", p);
+            actor.draw_geometry();
+
             glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
             glViewport(0, 0, width, height);
+            glCullFace(GL_BACK);
         }
 
         Shader& sh = actor.active_shader();
@@ -307,12 +328,17 @@ int main() {
         if (glass) {
             sh.setInt("sceneDirect", 3);
             sh.setInt("sceneIbl", 4);
+            sh.setInt("backDepth", 5);
             sh.setInt("sceneSampleEnabled", 1);
+            sh.setMatrix4("invViewProj", glm::inverse(p * v));
             glBindTextureUnit(3, hdrTarget.tex);
             glBindTextureUnit(4, hdrTarget.texIbl);
+            glBindTextureUnit(5, volumeDepth.depth);
         }
 
         actor.draw();
+        if (glass)
+            glDisable(GL_CULL_FACE);
 
         hdrTarget.resolve();
         ssao.draw(hdrTarget.depth, p, quad);
@@ -360,6 +386,7 @@ int main() {
     ibl_texture_destroy(solidPrefilter);
     ibl_texture_destroy(brdfLut);
     hdrTarget.destroy();
+    volumeDepth.destroy();
     ssao.destroy();
     quad.destroy();
     glfwDestroyWindow(window);

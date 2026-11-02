@@ -37,11 +37,15 @@ const std::string fShaderCode2 = R"(
     uniform float roughness;
     uniform float ior;
     uniform float transmission;
+    uniform vec3 attenuationColor;
+    uniform float attenuationDistance;
     uniform vec3 shIrradiance[9];
     uniform samplerCube prefilterMap;
     uniform sampler2D brdfLut;
     uniform sampler2D sceneDirect;
     uniform sampler2D sceneIbl;
+    uniform sampler2D backDepth;
+    uniform mat4 invViewProj;
     uniform float prefilterMaxLod;
     uniform int iblSpecEnabled;
     uniform int sceneSampleEnabled;
@@ -110,11 +114,27 @@ const std::string fShaderCode2 = R"(
         return mix(cubeT, scene, fade);
     }
 
+    vec3 worldFromDepth(vec2 uv, float depth) {
+        vec4 clip = vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+        vec4 world = invViewProj * clip;
+        return world.xyz / max(world.w, 1e-6);
+    }
+
+    float opticalPathLength(vec3 entry) {
+        ivec2 pix = ivec2(gl_FragCoord.xy);
+        float depthBack = texelFetch(backDepth, pix, 0).r;
+        if (depthBack >= 0.999)
+            return 0.0;
+        vec2 uv = (vec2(pix) + 0.5) / vec2(textureSize(backDepth, 0));
+        vec3 exitW = worldFromDepth(uv, depthBack);
+        if (length(exitW - cameraPos) <= length(entry - cameraPos))
+            return 0.0;
+        return length(exitW - entry);
+    }
+
     void main() {
         vec3 N = normalize(vNormal);
         vec3 V = normalize(cameraPos - vWorldPos);
-        if (dot(N, V) < 0.0)
-            N = -N;
         vec3 L = normalize(lightDir);
         vec3 H = normalize(V + L);
 
@@ -157,15 +177,27 @@ const std::string fShaderCode2 = R"(
 
         vec3 transmitted = vec3(0.0);
         vec3 T = refract(-V, N, 1.0 / etaIor);
-        if (dot(T, T) > 1e-6)
+        if (dot(T, T) > 1e-6) {
             transmitted = sampleTransmitted(vWorldPos, T, rough) * albedo * (1.0 - FssEss) * trans;
-        else
+            vec3 attCol = clamp(attenuationColor, vec3(1e-5), vec3(1.0));
+            float attDist = max(attenuationDistance, 1e-4);
+            vec3 sigma_t = -log(attCol) / attDist;
+            transmitted *= exp(-sigma_t * opticalPathLength(vWorldPos));
+        } else {
             FssEss = vec3(1.0);
+        }
 
         vec3 kD_ibl = (1.0 - FssEss) * (1.0 - trans);
         vec3 diffuse_ibl = kD_ibl * albedo / PI * evalSHIrradiance(N);
 
         fragDirect = vec4(direct + spec_ibl + transmitted, 1.0);
         fragDiffuseIbl = vec4(diffuse_ibl, 1.0);
+    }
+)";
+
+const std::string fShaderCode2Depth = R"(
+    #version 460 core
+
+    void main() {
     }
 )";

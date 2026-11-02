@@ -332,6 +332,8 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             ImGui::SliderFloat("roughness", &material2.roughness, 0.045f, 1.f);
             ImGui::SliderFloat("ior", &material2.ior, 1.01f, 2.5f);
             ImGui::SliderFloat("transmission##amount", &material2.transmission, 0.f, 1.f);
+            ImGui::ColorEdit3("attenuationColor", &material2.attenuationColor.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("attenuationDistance", &material2.attenuationDistance, 0.02f, 4.f);
             ImGui::PopID();
             ImGui::EndTabItem();
         }

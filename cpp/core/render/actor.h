@@ -20,6 +20,7 @@ struct Actor {
     Shader shader;
     Shader shader1;
     Shader shader2;
+    Shader shader2Depth;
     ObjMesh mesh;
     Material material;
     Material1 material1;
@@ -101,8 +102,14 @@ struct Actor {
             sh.setFloat("roughness", material2.roughness);
             sh.setFloat("ior", material2.ior);
             sh.setFloat("transmission", material2.transmission);
+            sh.setVec3f("attenuationColor", material2.attenuationColor);
+            sh.setFloat("attenuationDistance", material2.attenuationDistance);
         }
 
+        draw_geometry();
+    }
+
+    void draw_geometry() {
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
         glBindVertexArray(0);

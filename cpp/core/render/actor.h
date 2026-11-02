@@ -4,6 +4,7 @@
 #include "core/obj_loader.h"
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
+#include "core/materials/material_2.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -18,16 +19,22 @@ struct Vertex {
 struct Actor {
     Shader shader;
     Shader shader1;
+    Shader shader2;
     ObjMesh mesh;
     Material material;
     Material1 material1;
+    Material2 material2;
     int materialId = 0;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
 
     Shader& active_shader() {
-        return materialId == 0 ? shader : shader1;
+        if (materialId == 1)
+            return shader1;
+        if (materialId == 2)
+            return shader2;
+        return shader;
     }
 
     void init() {
@@ -83,12 +90,17 @@ struct Actor {
             sh.setVec3f("albedo", material.albedo);
             sh.setFloat("metallic", material.metallic);
             sh.setFloat("roughness", material.roughness);
-        } else {
+        } else if (materialId == 1) {
             sh.setVec3f("albedo", material1.albedo);
             sh.setFloat("metallic", material1.metallic);
             sh.setFloat("roughness", material1.roughness);
             sh.setFloat("clearcoat", material1.clearcoat);
             sh.setFloat("clearcoatRoughness", material1.clearcoatRoughness);
+        } else {
+            sh.setVec3f("albedo", material2.albedo);
+            sh.setFloat("roughness", material2.roughness);
+            sh.setFloat("ior", material2.ior);
+            sh.setFloat("transmission", material2.transmission);
         }
 
         glBindVertexArray(vao);

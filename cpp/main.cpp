@@ -10,9 +10,11 @@
 #include "core/render/sh.h"
 #include "core/shaders/shader_code_0.h"
 #include "core/shaders/shader_code_1.h"
+#include "core/shaders/shader_code_2.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
+#include "core/materials/material_2.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
 
@@ -159,6 +161,7 @@ int main() {
     Actor actor;
     actor.shader.compile(vShaderCode, fShaderCode);
     actor.shader1.compile(vShaderCode1, fShaderCode1);
+    actor.shader2.compile(vShaderCode2, fShaderCode2);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
@@ -168,6 +171,10 @@ int main() {
     actor.material1.roughness = 0.3f;
     actor.material1.clearcoat = 1.f;
     actor.material1.clearcoatRoughness = 0.1f;
+    actor.material2.albedo = glm::vec3(1.f);
+    actor.material2.roughness = 0.045f;
+    actor.material2.ior = 1.5f;
+    actor.material2.transmission = 1.f;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);
@@ -260,6 +267,16 @@ int main() {
 
         ground.draw(v, p, ambientColor, aoCenter, aoRadius);
 
+        if (environment.mode == 1 && environment.envCube != 0)
+            skybox.draw(v, p, environment.envCube);
+
+        const bool glass = actor.materialId == 2;
+        if (glass) {
+            hdrTarget.resolve();
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
+            glViewport(0, 0, width, height);
+        }
+
         Shader& sh = actor.active_shader();
         sh.bind();
         sh.setMatrix4("viewMatrix", v);
@@ -287,11 +304,15 @@ int main() {
         if (spec_ibl)
             glBindTextureUnit(1, spec_map);
         glBindTextureUnit(2, brdfLut);
+        if (glass) {
+            sh.setInt("sceneDirect", 3);
+            sh.setInt("sceneIbl", 4);
+            sh.setInt("sceneSampleEnabled", 1);
+            glBindTextureUnit(3, hdrTarget.tex);
+            glBindTextureUnit(4, hdrTarget.texIbl);
+        }
 
         actor.draw();
-
-        if (environment.mode == 1 && environment.envCube != 0)
-            skybox.draw(v, p, environment.envCube);
 
         hdrTarget.resolve();
         ssao.draw(hdrTarget.depth, p, quad);
@@ -317,7 +338,7 @@ int main() {
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.mesh, environment, ssao, exposure);
+            actor.material1, actor.material2, actor.mesh, environment, ssao, exposure);
 
 #pragma region memory usage
         auto usage = host_usage();

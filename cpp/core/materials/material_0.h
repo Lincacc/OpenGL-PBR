@@ -2,9 +2,8 @@
 
 #include <glm/glm.hpp>
 
-#include <string>
-
 struct Material {
-	glm::vec3 albedo;
-	glm::vec3 matParams;
+    glm::vec3 albedo{ 1.f };
+    float metallic = 0.f;
+    float roughness = 0.1f;
 };

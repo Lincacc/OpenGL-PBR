@@ -20,12 +20,20 @@ const std::string fTonemapShaderCode = R"(
 
     in vec2 vUV;
 
-    uniform sampler2D hdrMap;
+    uniform sampler2D directMap;
+    uniform sampler2D iblMap;
+    uniform sampler2D ssaoMap;
+    uniform int ssaoEnabled;
+    uniform float ssaoStrength;
 
     layout(location = 0) out vec4 fragColor;
 
     void main() {
-        vec3 color = texture(hdrMap, vUV).rgb;
+        float ao = 1.0;
+        if (ssaoEnabled != 0)
+            ao = mix(1.0, texture(ssaoMap, vUV).r, clamp(ssaoStrength, 0.0, 1.0));
+
+        vec3 color = texture(directMap, vUV).rgb + texture(iblMap, vUV).rgb * ao;
         color = color / (color + vec3(1.0));
         color = pow(color, vec3(1.0 / 2.2));
         fragColor = vec4(color, 1.0);

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "shader_program.h"
-#include "shaders/shader_code_skybox.h"
+#include "core/shader_program.h"
+#include "core/shaders/shader_code_skybox.h"
 
 #include <cstdint>
 #include <stdexcept>

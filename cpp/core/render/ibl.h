@@ -1,9 +1,9 @@
 #pragma once
 
-#include "shader_program.h"
-#include "shaders/shader_code_ibl.h"
-#include "shaders/shader_code_skybox.h"
-#include "skybox.h"
+#include "core/shader_program.h"
+#include "core/shaders/shader_code_ibl.h"
+#include "core/shaders/shader_code_skybox.h"
+#include "core/render/skybox.h"
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>

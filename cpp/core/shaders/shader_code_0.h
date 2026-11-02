@@ -29,17 +29,19 @@ const std::string fShaderCode = R"(
     in vec3 vNormal;
 
     uniform vec3 cameraPos;
-    uniform vec3 lightDir;     
-    uniform vec3 lightColor;  
-    uniform vec3 albedo;        
-    uniform vec3 matParams;
+    uniform vec3 lightDir;
+    uniform vec3 lightColor;
+    uniform vec3 albedo;
+    uniform float metallic;
+    uniform float roughness;
     uniform vec3 shIrradiance[9];
     uniform samplerCube prefilterMap;
     uniform sampler2D brdfLut;
     uniform float prefilterMaxLod;
     uniform int iblSpecEnabled;
 
-    layout(location = 0) out vec4 fragColor;
+    layout(location = 0) out vec4 fragDirect;
+    layout(location = 1) out vec4 fragDiffuseIbl;
 
     const float PI = 3.14159265359;
 
@@ -81,24 +83,23 @@ const std::string fShaderCode = R"(
         vec3 L = normalize(lightDir);
         vec3 H = normalize(V + L);
 
-        float metallic  = clamp(matParams.x, 0.0, 1.0);
-        float roughness = clamp(matParams.y, 0.045, 1.0);
-        float ao        = clamp(matParams.z, 0.0, 1.0);
-        float a         = roughness * roughness;
+        float metal = clamp(metallic, 0.0, 1.0);
+        float rough = clamp(roughness, 0.045, 1.0);
+        float a     = rough * rough;
 
         float NdotL = max(dot(N, L), 0.0);
         float NdotV = max(dot(N, V), 1e-4);
         float NdotH = max(dot(N, H), 0.0);
         float VdotH = max(dot(V, H), 0.0);
 
-        vec3 F0 = mix(vec3(0.04), albedo, metallic);
+        vec3 F0 = mix(vec3(0.04), albedo, metal);
         vec3 F  = F_Schlick(VdotH, F0);
 
         float D = D_GGX(NdotH, a);
-        float G = G_Smith(NdotV, NdotL, roughness);
+        float G = G_Smith(NdotV, NdotL, rough);
         vec3  spec = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
 
-        vec3 kD = (1.0 - F) * (1.0 - metallic);
+        vec3 kD = (1.0 - F) * (1.0 - metal);
         vec3 diffuse = kD * albedo / PI;
 
         vec3 direct = (diffuse + spec) * lightColor * NdotL;
@@ -107,8 +108,8 @@ const std::string fShaderCode = R"(
         vec3 spec_ibl = vec3(0.0);
         if (iblSpecEnabled != 0) {
             vec3 R = reflect(-V, N);
-            vec3 prefiltered = textureLod(prefilterMap, R, roughness * prefilterMaxLod).rgb;
-            vec2 dfg = texture(brdfLut, vec2(NdotV, roughness)).rg;
+            vec3 prefiltered = textureLod(prefilterMap, R, rough * prefilterMaxLod).rgb;
+            vec2 dfg = texture(brdfLut, vec2(NdotV, rough)).rg;
             FssEss = F0 * dfg.x + dfg.y;
             float Ess = dfg.x + dfg.y;
             float Ems = 1.0 - Ess;
@@ -117,9 +118,10 @@ const std::string fShaderCode = R"(
             float horizon = min(1.0 + dot(R, N), 1.0);
             spec_ibl = prefiltered * (FssEss + Fms) * (horizon * horizon);
         }
-        vec3 kD_ibl = (1.0 - FssEss) * (1.0 - metallic);
-        vec3 diffuse_ibl = kD_ibl * albedo / PI * evalSHIrradiance(N) * ao;
+        vec3 kD_ibl = (1.0 - FssEss) * (1.0 - metal);
+        vec3 diffuse_ibl = kD_ibl * albedo / PI * evalSHIrradiance(N);
 
-        fragColor = vec4(diffuse_ibl + spec_ibl + direct, 1.0);
+        fragDirect = vec4(direct + spec_ibl, 1.0);
+        fragDiffuseIbl = vec4(diffuse_ibl, 1.0);
     }
 )";

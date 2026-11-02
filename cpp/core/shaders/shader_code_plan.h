@@ -29,19 +29,21 @@ const std::string fGroundShaderCode = R"(
     uniform float aoStrength;
     uniform float fadeRadius;
 
-    layout(location = 0) out vec4 fragColor;
+    layout(location = 0) out vec4 fragDirect;
+    layout(location = 1) out vec4 fragDiffuseIbl;
 
     void main() {
-        vec2 d = vWorldPos.xz - aoCenter;
-        float r = length(d);
-
-        float ao = exp(-(r * r) / max(aoRadius * aoRadius, 1e-6));
-        vec3 color = ambientColor * (1.0 - aoStrength * ao);
-
-        float fade = 1.0 - smoothstep(fadeRadius * 0.55, fadeRadius, r);
+        float rFade = length(vWorldPos.xz);
+        float fade = 1.0 - smoothstep(fadeRadius * 0.55, fadeRadius, rFade);
         if (fade < 1e-3)
             discard;
 
-        fragColor = vec4(color, fade);
+        vec2 d = vWorldPos.xz - aoCenter;
+        float r = length(d);
+        float contact = exp(-(r * r) / max(aoRadius * aoRadius, 1e-6));
+        vec3 lit = ambientColor * (1.0 - aoStrength * contact);
+
+        fragDirect = vec4(ambientColor * (1.0 - fade), 1.0);
+        fragDiffuseIbl = vec4(lit * fade, 1.0);
     }
 )";

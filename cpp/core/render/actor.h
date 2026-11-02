@@ -1,8 +1,12 @@
 #pragma once
 
-#include "shader_program.h"
-#include "obj_loader.h"
-#include "materials/material_0.h"
+#include "core/shader_program.h"
+#include "core/obj_loader.h"
+#include "core/materials/material_0.h"
+
+#include <cstddef>
+#include <stdexcept>
+#include <vector>
 
 struct Vertex {
     glm::vec3 position;
@@ -67,7 +71,8 @@ struct Actor {
 
     void draw() {
         shader.setVec3f("albedo", material.albedo);
-        shader.setVec3f("matParams", material.matParams);
+        shader.setFloat("metallic", material.metallic);
+        shader.setFloat("roughness", material.roughness);
 
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);

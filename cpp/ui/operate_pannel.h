@@ -1,6 +1,7 @@
 #pragma once
 
-#include "core/hdr_preview.h"
+#include "core/render/hdr_preview.h"
+#include "core/render/ssao.h"
 #include "core/light.h"
 #include "core/materials/material_0.h"
 #include "core/obj_loader.h"
@@ -245,7 +246,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 }
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
-    Material& material, const ObjMesh& mesh, EnvironmentSettings& env)
+    Material& material, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -284,14 +285,21 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
             draw_environment_panel(env);
 
+            if (ImGui::CollapsingHeader("SSAO")) {
+                ImGui::Checkbox("enabled", &ssao.enabled);
+                ImGui::BeginDisabled(!ssao.enabled);
+                ImGui::SliderFloat("radius", &ssao.radius, 0.05f, 2.f, "%.2f");
+                ImGui::SliderFloat("strength", &ssao.strength, 0.f, 1.f, "%.2f");
+                ImGui::EndDisabled();
+            }
+
             ImGui::EndTabItem();
         }
 
         if (ImGui::BeginTabItem("material")) {
             ImGui::ColorEdit3("albedo", &material.albedo.x, ImGuiColorEditFlags_Float);
-            ImGui::SliderFloat("metallic", &material.matParams.x, 0.f, 1.f);
-            ImGui::SliderFloat("roughness", &material.matParams.y, 0.045f, 1.f);
-            ImGui::SliderFloat("ao", &material.matParams.z, 0.f, 1.f);
+            ImGui::SliderFloat("metallic", &material.metallic, 0.f, 1.f);
+            ImGui::SliderFloat("roughness", &material.roughness, 0.045f, 1.f);
             ImGui::EndTabItem();
         }
 

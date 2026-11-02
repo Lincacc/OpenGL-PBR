@@ -1,7 +1,7 @@
 #pragma once
 
-#include "shader_program.h"
-#include "shaders/shader_code_plan.h"
+#include "core/shader_program.h"
+#include "core/shaders/shader_code_plan.h"
 
 #include <cstdint>
 #include <stdexcept>
@@ -42,8 +42,8 @@ struct Ground {
         glVertexArrayAttribBinding(vao, 0, 0);
     }
 
-    void draw(const glm::mat4& view, const glm::mat4& proj,
-        const glm::vec3& ambient, const glm::vec2& aoCenter, float aoRadius)
+    void draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& ambient,
+        const glm::vec2& aoCenter, float aoRadius)
     {
         shader.bind();
         shader.setMatrix4("viewMatrix", view);
@@ -54,11 +54,8 @@ struct Ground {
         shader.setFloat("aoStrength", aoStrength);
         shader.setFloat("fadeRadius", fadeRadius);
 
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);
         glBindVertexArray(0);
-        glDisable(GL_BLEND);
     }
 };

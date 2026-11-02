@@ -10,11 +10,11 @@
 #include <windows.h>
 #include <commdlg.h>
 
-#include "ibl.h"
-#include "shader_program.h"
-#include "shaders/shader_code_skybox.h"
-#include "sh.h"
-#include "skybox.h"
+#include "core/render/ibl.h"
+#include "core/shader_program.h"
+#include "core/shaders/shader_code_skybox.h"
+#include "core/render/sh.h"
+#include "core/render/skybox.h"
 
 #include <glad/glad.h>
 #include <glm/glm.hpp>

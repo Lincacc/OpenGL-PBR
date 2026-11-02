@@ -26,10 +26,12 @@ const std::string fSkyboxShaderCode = R"(
 
     uniform samplerCube envMap;
 
-    layout(location = 0) out vec4 fragColor;
+    layout(location = 0) out vec4 fragDirect;
+    layout(location = 1) out vec4 fragDiffuseIbl;
 
     void main() {
-        fragColor = vec4(texture(envMap, normalize(vLocalPos)).rgb, 1.0);
+        fragDirect = vec4(texture(envMap, normalize(vLocalPos)).rgb, 1.0);
+        fragDiffuseIbl = vec4(0.0);
     }
 )";
 

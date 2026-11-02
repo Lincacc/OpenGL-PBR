@@ -1,12 +1,13 @@
 #include "core/core.h"
-#include "core/full_quad.h"
-#include "core/color_target.h"
-#include "core/actor.h"
-#include "core/ground.h"
-#include "core/skybox.h"
+#include "core/render/full_quad.h"
+#include "core/render/color_target.h"
+#include "core/render/actor.h"
+#include "core/render/ground.h"
+#include "core/render/skybox.h"
+#include "core/render/ssao.h"
 #include "core/light.h"
-#include "core/ibl.h"
-#include "core/sh.h"
+#include "core/render/ibl.h"
+#include "core/render/sh.h"
 #include "core/shaders/shader_code_0.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
@@ -49,6 +50,7 @@ static void apply_orbit() {
 
 FullscreenQuad quad;
 ColorTarget hdrTarget;
+Ssao ssao;
 Shader tonemap;
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
@@ -156,9 +158,8 @@ int main() {
     actor.shader.compile(vShaderCode, fShaderCode);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
-    actor.material.matParams.r = 0;
-    actor.material.matParams.g = 0.1;
-    actor.material.matParams.b = 0.2;
+    actor.material.metallic = 0.f;
+    actor.material.roughness = 0.1f;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);
@@ -180,6 +181,7 @@ int main() {
     quad.create();
     tonemap.compile(vTonemapShaderCode, fTonemapShaderCode);
     hdrTarget.create(width, height);
+    ssao.create(width, height);
 
     GLuint brdfLut = ibl_brdf_lut_create();
     if (brdfLut == 0)
@@ -231,12 +233,22 @@ int main() {
 
         if (hdrTarget.w != width || hdrTarget.h != height)
             hdrTarget.create(width, height);
+        if (ssao.w != width || ssao.h != height)
+            ssao.create(width, height);
 
         glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.fbo);
         glViewport(0, 0, width, height);
         glEnable(GL_DEPTH_TEST);
-        glClearColor(ambientColor.r, ambientColor.g, ambientColor.b, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        const float clear_direct[4] = {
+            environment.mode == 1 ? 0.f : ambientColor.r,
+            environment.mode == 1 ? 0.f : ambientColor.g,
+            environment.mode == 1 ? 0.f : ambientColor.b,
+            1.f
+        };
+        const float clear_ibl[4] = { 0.f, 0.f, 0.f, 0.f };
+        glClearBufferfv(GL_COLOR, 0, clear_direct);
+        glClearBufferfv(GL_COLOR, 1, clear_ibl);
+        glClear(GL_DEPTH_BUFFER_BIT);
 
         ground.draw(v, p, ambientColor, aoCenter, aoRadius);
 
@@ -272,12 +284,20 @@ int main() {
         if (environment.mode == 1 && environment.envCube != 0)
             skybox.draw(v, p, environment.envCube);
 
+        ssao.draw(hdrTarget.depth, p, quad);
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glDisable(GL_DEPTH_TEST);
         tonemap.bind();
-        tonemap.setInt("hdrMap", 0);
+        tonemap.setInt("directMap", 0);
+        tonemap.setInt("iblMap", 1);
+        tonemap.setInt("ssaoMap", 2);
+        tonemap.setInt("ssaoEnabled", ssao.enabled ? 1 : 0);
+        tonemap.setFloat("ssaoStrength", ssao.strength);
         glBindTextureUnit(0, hdrTarget.tex);
+        glBindTextureUnit(1, hdrTarget.texIbl);
+        glBindTextureUnit(2, ssao.blurred);
         quad.draw();
         glEnable(GL_DEPTH_TEST);
 
@@ -285,7 +305,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment);
+        draw_operate_pannel(width, height, sun, sun_gizmo, actor.material, actor.mesh, environment, ssao);
 
 #pragma region memory usage
         auto usage = host_usage();
@@ -307,6 +327,7 @@ int main() {
     ibl_texture_destroy(solidPrefilter);
     ibl_texture_destroy(brdfLut);
     hdrTarget.destroy();
+    ssao.destroy();
     quad.destroy();
     glfwDestroyWindow(window);
     glfwTerminate();

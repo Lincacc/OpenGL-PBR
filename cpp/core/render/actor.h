@@ -7,6 +7,7 @@
 #include "core/materials/material_2.h"
 #include "core/materials/material_3.h"
 #include "core/materials/material_4.h"
+#include "core/materials/material_5.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -25,18 +26,23 @@ struct Actor {
     Shader shader2Depth;
     Shader shader3;
     Shader shader4;
+    Shader shader5;
     ObjMesh mesh;
     Material material;
     Material1 material1;
     Material2 material2;
     Material3 material3;
     Material4 material4;
+    Material5 material5;
     int materialId = 0;
+    bool meshInspect = false;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
 
     Shader& active_shader() {
+        if (meshInspect)
+            return shader5;
         if (materialId == 1)
             return shader1;
         if (materialId == 2)
@@ -97,6 +103,13 @@ struct Actor {
 
     void draw() {
         Shader& sh = active_shader();
+        if (meshInspect) {
+            sh.setVec3f("albedo", material5.albedo);
+            sh.setVec3f("rim", material5.rim);
+            sh.setFloat("power", material5.power);
+            draw_geometry();
+            return;
+        }
         if (materialId == 0) {
             sh.setVec3f("albedo", material.albedo);
             sh.setFloat("metallic", material.metallic);

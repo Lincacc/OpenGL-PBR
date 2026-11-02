@@ -251,7 +251,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    Material3& material3, Material4& material4, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
+    Material3& material3, Material4& material4, bool& meshInspect, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -270,7 +270,9 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
     ImGui::Begin("operate", nullptr, flags);
 
     if (ImGui::BeginTabBar("operate_tabs", ImGuiTabBarFlags_None)) {
+        int tab = -1;
         if (ImGui::BeginTabItem("light")) {
+            tab = 0;
             if (ImGui::CollapsingHeader("\xE5\x85\x89\xE6\xBA\x90\xE6\x97\x8B\xE8\xBD\xAC", ImGuiTreeNodeFlags_DefaultOpen)) {
                 const float ring_r = std::clamp((panel_w - 48.f) * 0.28f, 48.f, 72.f);
                 static PreviewLight sun_preview{ true, 0, 0.f, 0.f, 1.f, 1.f };
@@ -306,6 +308,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
         }
 
         if (ImGui::BeginTabItem("material")) {
+            tab = 1;
             ImGui::PushID(0);
             if (ImGui::CollapsingHeader("standard", ImGuiTreeNodeFlags_DefaultOpen)) {
                 bool use0 = (materialId == 0);
@@ -386,10 +389,20 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
         }
 
         if (ImGui::BeginTabItem("mesh")) {
+            tab = 2;
             ImGui::Text("vertices  %zu", mesh.positions.size());
             ImGui::Text("triangles %zu", mesh.indices.size() / 3);
             ImGui::EndTabItem();
         }
+
+        static int lastTab = 0;
+        if (tab == 2 && lastTab != 2)
+            meshInspect = true;
+        else if (tab != 2 && lastTab == 2)
+            meshInspect = false;
+        if (tab >= 0)
+            lastTab = tab;
+
         ImGui::EndTabBar();
     }
 

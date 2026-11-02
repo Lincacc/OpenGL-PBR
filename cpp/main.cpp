@@ -13,12 +13,14 @@
 #include "core/shaders/shader_code_2.h"
 #include "core/shaders/shader_code_3.h"
 #include "core/shaders/shader_code_4.h"
+#include "core/shaders/shader_code_5.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
 #include "core/materials/material_3.h"
 #include "core/materials/material_4.h"
+#include "core/materials/material_5.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
 
@@ -172,6 +174,7 @@ int main() {
     actor.shader2Depth.compile(vShaderCode2, fShaderCode2Depth);
     actor.shader3.compile(vShaderCode3, fShaderCode3);
     actor.shader4.compile(vShaderCode4, fShaderCode4);
+    actor.shader5.compile(vShaderCode5, fShaderCode5);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
@@ -298,7 +301,7 @@ int main() {
         if (environment.mode == 1 && environment.envCube != 0)
             skybox.draw(v, p, environment.envCube);
 
-        const bool glass = actor.materialId == 2;
+        const bool glass = actor.materialId == 2 && !actor.meshInspect;
         if (glass) {
             hdrTarget.resolve();
 
@@ -383,7 +386,7 @@ int main() {
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.material2, actor.material3, actor.material4, actor.mesh, environment, ssao, exposure);
+            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.mesh, environment, ssao, exposure);
 
 #pragma region memory usage
         auto usage = host_usage();

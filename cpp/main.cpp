@@ -11,10 +11,12 @@
 #include "core/shaders/shader_code_0.h"
 #include "core/shaders/shader_code_1.h"
 #include "core/shaders/shader_code_2.h"
+#include "core/shaders/shader_code_3.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
+#include "core/materials/material_3.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
 
@@ -166,6 +168,7 @@ int main() {
     actor.shader1.compile(vShaderCode1, fShaderCode1);
     actor.shader2.compile(vShaderCode2, fShaderCode2);
     actor.shader2Depth.compile(vShaderCode2, fShaderCode2Depth);
+    actor.shader3.compile(vShaderCode3, fShaderCode3);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
@@ -181,6 +184,12 @@ int main() {
     actor.material2.transmission = 1.f;
     actor.material2.attenuationColor = glm::vec3(0.75f, 0.93f, 0.82f);
     actor.material2.attenuationDistance = 0.45f;
+    actor.material3.albedo = glm::vec3(0.55f, 0.74f, 0.58f);
+    actor.material3.metallic = 0.f;
+    actor.material3.roughness = 0.18f;
+    actor.material3.specular = 0.78f;
+    actor.material3.subsurfaceColor = glm::vec3(0.12f, 0.42f, 0.22f);
+    actor.material3.opacity = 0.55f;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);
@@ -364,7 +373,7 @@ int main() {
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.material2, actor.mesh, environment, ssao, exposure);
+            actor.material1, actor.material2, actor.material3, actor.mesh, environment, ssao, exposure);
 
 #pragma region memory usage
         auto usage = host_usage();

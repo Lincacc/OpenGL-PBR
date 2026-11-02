@@ -6,6 +6,7 @@
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
+#include "core/materials/material_3.h"
 #include "core/obj_loader.h"
 
 #include <imgui.h>
@@ -249,7 +250,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
+    Material3& material3, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -334,6 +335,18 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             ImGui::SliderFloat("transmission##amount", &material2.transmission, 0.f, 1.f);
             ImGui::ColorEdit3("attenuationColor", &material2.attenuationColor.x, ImGuiColorEditFlags_Float);
             ImGui::SliderFloat("attenuationDistance", &material2.attenuationDistance, 0.02f, 4.f);
+            ImGui::PopID();
+
+            ImGui::PushID(3);
+            bool use3 = (materialId == 3);
+            if (ImGui::Checkbox("subsurface##select", &use3) && use3)
+                materialId = 3;
+            ImGui::ColorEdit3("albedo", &material3.albedo.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("metallic", &material3.metallic, 0.f, 1.f);
+            ImGui::SliderFloat("roughness", &material3.roughness, 0.045f, 1.f);
+            ImGui::SliderFloat("specular", &material3.specular, 0.f, 1.f);
+            ImGui::ColorEdit3("subsurfaceColor", &material3.subsurfaceColor.x, ImGuiColorEditFlags_Float);
+            ImGui::SliderFloat("opacity", &material3.opacity, 0.f, 1.f);
             ImGui::PopID();
             ImGui::EndTabItem();
         }

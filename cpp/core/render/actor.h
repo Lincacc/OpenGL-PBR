@@ -5,6 +5,7 @@
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
+#include "core/materials/material_3.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -21,10 +22,12 @@ struct Actor {
     Shader shader1;
     Shader shader2;
     Shader shader2Depth;
+    Shader shader3;
     ObjMesh mesh;
     Material material;
     Material1 material1;
     Material2 material2;
+    Material3 material3;
     int materialId = 0;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
@@ -35,6 +38,8 @@ struct Actor {
             return shader1;
         if (materialId == 2)
             return shader2;
+        if (materialId == 3)
+            return shader3;
         return shader;
     }
 
@@ -97,13 +102,20 @@ struct Actor {
             sh.setFloat("roughness", material1.roughness);
             sh.setFloat("clearcoat", material1.clearcoat);
             sh.setFloat("clearcoatRoughness", material1.clearcoatRoughness);
-        } else {
+        } else if (materialId == 2) {
             sh.setVec3f("albedo", material2.albedo);
             sh.setFloat("roughness", material2.roughness);
             sh.setFloat("ior", material2.ior);
             sh.setFloat("transmission", material2.transmission);
             sh.setVec3f("attenuationColor", material2.attenuationColor);
             sh.setFloat("attenuationDistance", material2.attenuationDistance);
+        } else if (materialId == 3) {
+            sh.setVec3f("albedo", material3.albedo);
+            sh.setFloat("metallic", material3.metallic);
+            sh.setFloat("roughness", material3.roughness);
+            sh.setFloat("specular", material3.specular);
+            sh.setVec3f("subsurfaceColor", material3.subsurfaceColor);
+            sh.setFloat("opacity", material3.opacity);
         }
 
         draw_geometry();

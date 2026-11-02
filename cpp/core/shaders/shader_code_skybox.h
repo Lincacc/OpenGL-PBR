@@ -29,10 +29,7 @@ const std::string fSkyboxShaderCode = R"(
     layout(location = 0) out vec4 fragColor;
 
     void main() {
-        vec3 color = texture(envMap, normalize(vLocalPos)).rgb;
-        color = color / (color + vec3(1.0));
-        color = pow(color, vec3(1.0 / 2.2));
-        fragColor = vec4(color, 1.0);
+        fragColor = vec4(texture(envMap, normalize(vLocalPos)).rgb, 1.0);
     }
 )";
 

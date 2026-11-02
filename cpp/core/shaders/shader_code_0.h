@@ -120,9 +120,6 @@ const std::string fShaderCode = R"(
         vec3 kD_ibl = (1.0 - FssEss) * (1.0 - metallic);
         vec3 diffuse_ibl = kD_ibl * albedo / PI * evalSHIrradiance(N) * ao;
 
-        vec3 color = diffuse_ibl + spec_ibl + direct;
-        color = color / (color + vec3(1.0));
-        color = pow(color, vec3(1.0 / 2.2));
-        fragColor = vec4(color, 1.0);
+        fragColor = vec4(diffuse_ibl + spec_ibl + direct, 1.0);
     }
 )";

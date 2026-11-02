@@ -1,4 +1,6 @@
 #include "core/core.h"
+#include "core/full_quad.h"
+#include "core/color_target.h"
 #include "core/actor.h"
 #include "core/ground.h"
 #include "core/skybox.h"
@@ -6,6 +8,7 @@
 #include "core/ibl.h"
 #include "core/sh.h"
 #include "core/shaders/shader_code_0.h"
+#include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
@@ -35,7 +38,6 @@ float orbitRadius = 4.f;
 bool orbitDragging = false;
 double orbitLastX = 0.0;
 double orbitLastY = 0.0;
-
 static void apply_orbit() {
     float cp = std::cos(orbitPitch);
     camera.position = {
@@ -44,6 +46,10 @@ static void apply_orbit() {
         orbitRadius * cp * std::sin(orbitYaw)
     };
 }
+
+FullscreenQuad quad;
+ColorTarget hdrTarget;
+Shader tonemap;
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
@@ -171,6 +177,10 @@ int main() {
     skybox.init();
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
+    quad.create();
+    tonemap.compile(vTonemapShaderCode, fTonemapShaderCode);
+    hdrTarget.create(width, height);
+
     GLuint brdfLut = ibl_brdf_lut_create();
     if (brdfLut == 0)
         throw std::runtime_error("ibl_brdf_lut_create failed");
@@ -212,12 +222,19 @@ int main() {
         ambientColor = environment.solidColor;
         glfwPollEvents();
         glfwGetFramebufferSize(window, &width, &height);
+        if (width <= 0 || height <= 0)
+            continue;
 
         camera.aspect = float(width) / float(height);
         const auto& v = camera.view();
         const auto& p = camera.project();
-        
+
+        if (hdrTarget.w != width || hdrTarget.h != height)
+            hdrTarget.create(width, height);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.fbo);
         glViewport(0, 0, width, height);
+        glEnable(GL_DEPTH_TEST);
         glClearColor(ambientColor.r, ambientColor.g, ambientColor.b, 1.f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -255,6 +272,15 @@ int main() {
         if (environment.mode == 1 && environment.envCube != 0)
             skybox.draw(v, p, environment.envCube);
 
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glDisable(GL_DEPTH_TEST);
+        tonemap.bind();
+        tonemap.setInt("hdrMap", 0);
+        glBindTextureUnit(0, hdrTarget.tex);
+        quad.draw();
+        glEnable(GL_DEPTH_TEST);
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
@@ -280,6 +306,8 @@ int main() {
     hdr_environment_destroy(environment.hdr, environment.envCube, environment.prefilterCube);
     ibl_texture_destroy(solidPrefilter);
     ibl_texture_destroy(brdfLut);
+    hdrTarget.destroy();
+    quad.destroy();
     glfwDestroyWindow(window);
     glfwTerminate();
 

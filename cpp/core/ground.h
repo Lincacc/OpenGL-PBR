@@ -10,7 +10,7 @@ struct Ground {
     Shader shader;
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 6;
-    float aoStrength = 0.7f;
+    float aoStrength = 1.f;
     float fadeRadius = 3.f;
 
     void init(float floorY, float halfExtent) {

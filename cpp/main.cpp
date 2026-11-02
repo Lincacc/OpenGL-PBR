@@ -158,7 +158,7 @@ int main() {
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.matParams.r = 0;
     actor.material.matParams.g = 0.1;
-    actor.material.matParams.b = 0;
+    actor.material.matParams.b = 0.2;
     actor.init();
 
     glm::vec3 bmin(1e9f), bmax(-1e9f);

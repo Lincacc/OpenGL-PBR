@@ -7,6 +7,7 @@
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
 #include "core/materials/material_3.h"
+#include "core/materials/material_4.h"
 #include "core/obj_loader.h"
 
 #include <imgui.h>
@@ -250,7 +251,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    Material3& material3, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
+    Material3& material3, Material4& material4, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -362,6 +363,22 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
                 ImGui::SliderFloat("specular", &material3.specular, 0.f, 1.f);
                 ImGui::ColorEdit3("subsurfaceColor", &material3.subsurfaceColor.x, ImGuiColorEditFlags_Float);
                 ImGui::SliderFloat("opacity", &material3.opacity, 0.f, 1.f);
+                ImGui::EndDisabled();
+            }
+            ImGui::PopID();
+
+            ImGui::PushID(4);
+            if (ImGui::CollapsingHeader("cloth")) {
+                bool use4 = (materialId == 4);
+                if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use4) && use4)
+                    materialId = 4;
+                ImGui::BeginDisabled(materialId != 4);
+                ImGui::ColorEdit3("albedo", &material4.albedo.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("metallic", &material4.metallic, 0.f, 1.f);
+                ImGui::SliderFloat("roughness", &material4.roughness, 0.045f, 1.f);
+                ImGui::SliderFloat("specular", &material4.specular, 0.f, 1.f);
+                ImGui::ColorEdit3("fuzzColor", &material4.fuzzColor.x, ImGuiColorEditFlags_Float);
+                ImGui::SliderFloat("cloth##amount", &material4.cloth, 0.f, 1.f);
                 ImGui::EndDisabled();
             }
             ImGui::PopID();

@@ -6,6 +6,7 @@
 #include "core/materials/material_1.h"
 #include "core/materials/material_2.h"
 #include "core/materials/material_3.h"
+#include "core/materials/material_4.h"
 
 #include <cstddef>
 #include <stdexcept>
@@ -23,11 +24,13 @@ struct Actor {
     Shader shader2;
     Shader shader2Depth;
     Shader shader3;
+    Shader shader4;
     ObjMesh mesh;
     Material material;
     Material1 material1;
     Material2 material2;
     Material3 material3;
+    Material4 material4;
     int materialId = 0;
 
     GLuint vao = 0, vbo = 0, ebo = 0;
@@ -40,6 +43,8 @@ struct Actor {
             return shader2;
         if (materialId == 3)
             return shader3;
+        if (materialId == 4)
+            return shader4;
         return shader;
     }
 
@@ -117,6 +122,13 @@ struct Actor {
             sh.setFloat("specular", material3.specular);
             sh.setVec3f("subsurfaceColor", material3.subsurfaceColor);
             sh.setFloat("opacity", material3.opacity);
+        } else if (materialId == 4) {
+            sh.setVec3f("albedo", material4.albedo);
+            sh.setFloat("metallic", material4.metallic);
+            sh.setFloat("roughness", material4.roughness);
+            sh.setFloat("specular", material4.specular);
+            sh.setVec3f("fuzzColor", material4.fuzzColor);
+            sh.setFloat("cloth", material4.cloth);
         }
 
         draw_geometry();

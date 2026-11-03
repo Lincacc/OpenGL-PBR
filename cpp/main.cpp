@@ -182,7 +182,7 @@ int main() {
     actor.shader3.compile(vShaderCode3, fShaderCode3);
     actor.shader4.compile(vShaderCode4, fShaderCode4);
     actor.shader5.compile(vShaderCode5, fShaderCode5);
-    actor.shader5Point.compile(vShaderCode5Point, fShaderCode5);
+    actor.shader5Point.compile(vShaderCode5Point, fShaderCode5Point);
     actor.shaderShadow.compile(vShaderCodeShadow, fShaderCodeShadow);
     actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);

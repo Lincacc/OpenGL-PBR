@@ -15,7 +15,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -24,54 +23,6 @@ struct Vertex {
     glm::vec3 normal;
     glm::vec2 uv;
 };
-
-inline void make_icosphere(std::vector<Vertex>& verts, std::vector<uint32_t>& indices)
-{
-    const float t = 1.61803398875f;
-    const glm::vec3 raw[] = {
-        { -1.f,  t, 0.f }, {  1.f,  t, 0.f }, { -1.f, -t, 0.f }, {  1.f, -t, 0.f },
-        {  0.f, -1.f,  t }, {  0.f,  1.f,  t }, {  0.f, -1.f, -t }, {  0.f,  1.f, -t },
-        {  t, 0.f, -1.f }, {  t, 0.f,  1.f }, { -t, 0.f, -1.f }, { -t, 0.f,  1.f },
-    };
-    std::vector<glm::vec3> pos;
-    pos.reserve(42);
-    for (const auto& p : raw)
-        pos.push_back(glm::normalize(p));
-
-    const uint32_t faces[][3] = {
-        { 0, 11, 5 }, { 0, 5, 1 }, { 0, 1, 7 }, { 0, 7, 10 }, { 0, 10, 11 },
-        { 1, 5, 9 }, { 5, 11, 4 }, { 11, 10, 2 }, { 10, 7, 6 }, { 7, 1, 8 },
-        { 3, 9, 4 }, { 3, 4, 2 }, { 3, 2, 6 }, { 3, 6, 8 }, { 3, 8, 9 },
-        { 4, 9, 5 }, { 2, 4, 11 }, { 6, 2, 10 }, { 8, 6, 7 }, { 9, 8, 1 },
-    };
-
-    std::unordered_map<uint64_t, uint32_t> mid;
-    auto midpoint = [&](uint32_t a, uint32_t b) {
-        if (a > b)
-            std::swap(a, b);
-        const uint64_t k = (uint64_t(a) << 32) | uint64_t(b);
-        if (auto it = mid.find(k); it != mid.end())
-            return it->second;
-        const uint32_t id = uint32_t(pos.size());
-        pos.push_back(glm::normalize(pos[a] + pos[b]));
-        mid.emplace(k, id);
-        return id;
-    };
-
-    indices.clear();
-    indices.reserve(80 * 3);
-    for (const auto& f : faces) {
-        const uint32_t a = f[0], b = f[1], c = f[2];
-        const uint32_t ab = midpoint(a, b);
-        const uint32_t bc = midpoint(b, c);
-        const uint32_t ca = midpoint(c, a);
-        indices.insert(indices.end(), { a, ab, ca, b, bc, ab, c, ca, bc, ab, bc, ca });
-    }
-
-    verts.resize(pos.size());
-    for (size_t i = 0; i < pos.size(); ++i)
-        verts[i] = { .position = pos[i], .normal = pos[i], .uv = {} };
-}
 
 struct Actor {
     Shader shader;
@@ -131,9 +82,7 @@ struct Actor {
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
-    GLuint pointVao = 0, sphereVbo = 0, sphereEbo = 0, instanceVbo = 0;
-    GLsizei sphereIndexCount = 0;
-    GLsizei instanceCount = 0;
+    GLsizei vertexCount = 0;
     float pointRadius = 0.01f;
 
     Shader& active_shader() {
@@ -198,8 +147,9 @@ struct Actor {
         glVertexArrayAttribBinding(vao, 2, 0);
 
         indexCount = static_cast<GLsizei>(mesh.indices.size());
+        vertexCount = static_cast<GLsizei>(mesh.positions.size());
         update_local_bounds();
-        init_point_instances();
+        update_point_radius();
     }
 
     void destroy_geometry() {
@@ -215,25 +165,8 @@ struct Actor {
             glDeleteBuffers(1, &ebo);
             ebo = 0;
         }
-        if (pointVao != 0) {
-            glDeleteVertexArrays(1, &pointVao);
-            pointVao = 0;
-        }
-        if (sphereVbo != 0) {
-            glDeleteBuffers(1, &sphereVbo);
-            sphereVbo = 0;
-        }
-        if (sphereEbo != 0) {
-            glDeleteBuffers(1, &sphereEbo);
-            sphereEbo = 0;
-        }
-        if (instanceVbo != 0) {
-            glDeleteBuffers(1, &instanceVbo);
-            instanceVbo = 0;
-        }
         indexCount = 0;
-        sphereIndexCount = 0;
-        instanceCount = 0;
+        vertexCount = 0;
     }
 
     void set_mesh(ObjMesh next) {
@@ -250,23 +183,7 @@ struct Actor {
         }
     }
 
-    void init_point_instances() {
-        std::vector<Vertex> sphereVerts;
-        std::vector<uint32_t> sphereIdx;
-        make_icosphere(sphereVerts, sphereIdx);
-
-        std::vector<glm::vec3> inst = mesh.positions;
-        std::sort(inst.begin(), inst.end(), [](const glm::vec3& a, const glm::vec3& b) {
-            if (a.x != b.x) return a.x < b.x;
-            if (a.y != b.y) return a.y < b.y;
-            return a.z < b.z;
-        });
-        inst.erase(std::unique(inst.begin(), inst.end(), [](const glm::vec3& a, const glm::vec3& b) {
-            return a.x == b.x && a.y == b.y && a.z == b.z;
-        }), inst.end());
-        if (inst.empty() || sphereVerts.empty() || sphereIdx.empty())
-            throw std::runtime_error("Actor::init point instances empty");
-
+    void update_point_radius() {
         double acc = 0.0;
         size_t nedge = 0;
         for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
@@ -278,37 +195,6 @@ struct Actor {
         }
         const float r = nedge > 0 ? 0.12f * float(acc / double(nedge)) : 0.006f;
         pointRadius = std::clamp(r, 0.002f, 0.025f);
-
-        glCreateVertexArrays(1, &pointVao);
-        glCreateBuffers(1, &sphereVbo);
-        glCreateBuffers(1, &sphereEbo);
-        glCreateBuffers(1, &instanceVbo);
-        if (pointVao == 0 || sphereVbo == 0 || sphereEbo == 0 || instanceVbo == 0)
-            throw std::runtime_error("Actor::init point glCreate* failed");
-
-        glNamedBufferStorage(sphereVbo, sphereVerts.size() * sizeof(Vertex), sphereVerts.data(), 0);
-        glNamedBufferStorage(sphereEbo, sphereIdx.size() * sizeof(uint32_t), sphereIdx.data(), 0);
-        glNamedBufferStorage(instanceVbo, inst.size() * sizeof(glm::vec3), inst.data(), 0);
-
-        glVertexArrayVertexBuffer(pointVao, 0, sphereVbo, 0, sizeof(Vertex));
-        glVertexArrayVertexBuffer(pointVao, 1, instanceVbo, 0, sizeof(glm::vec3));
-        glVertexArrayElementBuffer(pointVao, sphereEbo);
-        glVertexArrayBindingDivisor(pointVao, 1, 1);
-
-        glEnableVertexArrayAttrib(pointVao, 0);
-        glVertexArrayAttribFormat(pointVao, 0, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
-        glVertexArrayAttribBinding(pointVao, 0, 0);
-
-        glEnableVertexArrayAttrib(pointVao, 1);
-        glVertexArrayAttribFormat(pointVao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
-        glVertexArrayAttribBinding(pointVao, 1, 0);
-
-        glEnableVertexArrayAttrib(pointVao, 3);
-        glVertexArrayAttribFormat(pointVao, 3, 3, GL_FLOAT, GL_FALSE, 0);
-        glVertexArrayAttribBinding(pointVao, 3, 1);
-
-        sphereIndexCount = static_cast<GLsizei>(sphereIdx.size());
-        instanceCount = static_cast<GLsizei>(inst.size());
     }
 
     void draw() {
@@ -318,8 +204,12 @@ struct Actor {
             sh.setVec3f("albedo", material5.albedo);
             sh.setVec3f("rim", material5.rim);
             sh.setFloat("power", material5.power);
-            if (meshDrawMode == 1)
+            if (meshDrawMode == 1) {
+                GLint vp[4] = {};
+                glGetIntegerv(GL_VIEWPORT, vp);
                 sh.setFloat("pointRadius", pointRadius);
+                sh.setFloat("viewportHeight", float(vp[3]));
+            }
             draw_geometry();
             return;
         }
@@ -362,9 +252,11 @@ struct Actor {
 
     void draw_geometry() {
         if (meshInspect && meshDrawMode == 1) {
-            glBindVertexArray(pointVao);
-            glDrawElementsInstanced(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, nullptr, instanceCount);
+            glEnable(GL_PROGRAM_POINT_SIZE);
+            glBindVertexArray(vao);
+            glDrawArrays(GL_POINTS, 0, vertexCount);
             glBindVertexArray(0);
+            glDisable(GL_PROGRAM_POINT_SIZE);
             return;
         }
         const bool wire = meshInspect && meshDrawMode == 2;

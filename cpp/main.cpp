@@ -275,6 +275,7 @@ int main() {
         ImDrawList* draw_list = ImGui::GetForegroundDrawList();
         draw_list->AddText(ImVec2(9.f, 9.f), IM_COL32(0, 0, 0, 180), text);
         draw_list->AddText(ImVec2(8.f, 8.f), IM_COL32(255, 255, 255, 255), text);
+        draw_world_axes(v);
 #pragma endregion
 
         if (hdrTarget.w != width || hdrTarget.h != height)

@@ -274,6 +274,45 @@ inline float dist_to_seg(ImVec2 p, ImVec2 a, ImVec2 b)
     return std::sqrt(dx * dx + dy * dy);
 }
 
+inline void draw_world_axes(const glm::mat4& view)
+{
+    const ImGuiIO& io = ImGui::GetIO();
+    const float len = 42.f;
+    const float pad = 20.f;
+    const ImVec2 o(pad + len, io.DisplaySize.y - pad - len);
+    const glm::mat3 R(view);
+
+    auto proj = [&](const glm::vec3& w) {
+        const glm::vec3 vs = R * w;
+        return ImVec2(o.x + vs.x * len, o.y - vs.y * len);
+    };
+
+    struct Axis {
+        glm::vec3 d;
+        ImU32 col;
+        const char* lab;
+        float depth;
+    };
+    Axis ax[3] = {
+        { { 1.f, 0.f, 0.f }, IM_COL32(210, 72, 72, 255), "X", 0.f },
+        { { 0.f, 1.f, 0.f }, IM_COL32(72, 168, 86, 255), "Y", 0.f },
+        { { 0.f, 0.f, 1.f }, IM_COL32(70, 118, 214, 255), "Z", 0.f },
+    };
+    for (int i = 0; i < 3; ++i)
+        ax[i].depth = (R * ax[i].d).z;
+    std::sort(ax, ax + 3, [](const Axis& a, const Axis& b) { return a.depth > b.depth; });
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    dl->AddCircleFilled(o, 3.2f, IM_COL32(80, 80, 84, 255), 12);
+    for (const auto& a : ax) {
+        const ImVec2 tip = proj(a.d);
+        const ImVec2 lab = proj(a.d * 1.28f);
+        dl->AddLine(o, tip, a.col, 2.4f);
+        const ImVec2 ts = ImGui::CalcTextSize(a.lab);
+        dl->AddText(ImVec2(lab.x - ts.x * 0.5f, lab.y - ts.y * 0.5f), a.col, a.lab);
+    }
+}
+
 inline void draw_mesh_view_cube(float& orbitYaw, float& orbitPitch, ViewOrbitAnim& anim)
 {
     const float avail = ImGui::GetContentRegionAvail().x;
@@ -777,6 +816,10 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             if (ImGui::CollapsingHeader("\xE7\xBD\x91\xE6\xA0\xBC")) {
                 HeaderIndent indent;
                 const char* drawModes[] = { "face", "point", "wireframe" };
+                ImGui::AlignTextToFramePadding();
+                ImGui::TextUnformatted("draw type");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(-FLT_MIN);
                 ImGui::Combo("##mesh_draw_mode", &meshDrawMode, drawModes, IM_ARRAYSIZE(drawModes));
             }
             ImGui::EndTabItem();

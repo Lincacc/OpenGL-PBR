@@ -34,6 +34,7 @@ struct PreviewLight {
     float sat = 0.7f;
     float val = 1.f;
     float intensity = 1.f;
+    bool shadow = false;
 };
 
 struct HeaderIndent {
@@ -555,6 +556,10 @@ inline void draw_preview_light_params(PreviewLight& L)
 {
     HeaderIndent indent;
     ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &L.enabled);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!L.enabled);
+    ImGui::Checkbox("shadow", &L.shadow);
+    ImGui::EndDisabled();
     ImGui::BeginDisabled(!L.enabled);
 
     ImGui::RadioButton("RGB", &L.space, 0);
@@ -689,6 +694,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
                 light.color = hsv_to_rgb(sun_preview.hue, sun_preview.sat, sun_preview.val);
                 light.intensity = sun_preview.intensity;
                 light.enabled = sun_preview.enabled;
+                light.shadow = sun_preview.shadow;
             }
 
             static PreviewLight preview_lights[5]{};

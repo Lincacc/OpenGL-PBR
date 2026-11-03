@@ -82,6 +82,7 @@ struct Actor {
     Shader shader4;
     Shader shader5;
     Shader shader5Point;
+    Shader shaderShadow;
     ObjMesh mesh;
     Material material;
     Material1 material1;

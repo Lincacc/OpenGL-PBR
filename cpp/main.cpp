@@ -14,6 +14,7 @@
 #include "core/shaders/shader_code_3.h"
 #include "core/shaders/shader_code_4.h"
 #include "core/shaders/shader_code_5.h"
+#include "core/shaders/shader_code_shadow.h"
 #include "core/shaders/shader_code_tonemap.h"
 #include "core/materials/material_0.h"
 #include "core/materials/material_1.h"
@@ -168,6 +169,8 @@ int main() {
     sun.color = glm::vec3(1.f);
     sun.intensity = 1.f;
     sun.enabled = true;
+    sun.shadow = false;
+    sun.map.create();
     sun_gizmo = light_gizmo_from_dir(sun.dir);
 
     Actor actor;
@@ -179,6 +182,7 @@ int main() {
     actor.shader4.compile(vShaderCode4, fShaderCode4);
     actor.shader5.compile(vShaderCode5, fShaderCode5);
     actor.shader5Point.compile(vShaderCode5Point, fShaderCode5);
+    actor.shaderShadow.compile(vShaderCodeShadow, fShaderCodeShadow);
     actor.mesh = load_obj("cpp/resource/horse.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
@@ -345,6 +349,22 @@ int main() {
             if (ssao.w != width || ssao.h != height)
                 ssao.create(width, height);
 
+            const bool sunShadow = sun.enabled && sun.shadow;
+            if (sunShadow) {
+                sun.viewProj = shadow_fit_ortho(sun.dir, bmin, bmax, floorY);
+                glBindFramebuffer(GL_FRAMEBUFFER, sun.map.fbo);
+                glViewport(0, 0, kShadowMapSize, kShadowMapSize);
+                glEnable(GL_DEPTH_TEST);
+                glClear(GL_DEPTH_BUFFER_BIT);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(2.f, 4.f);
+                actor.shaderShadow.bind();
+                actor.shaderShadow.setMatrix4("lightViewProj", sun.viewProj);
+                actor.bind_transform(actor.shaderShadow);
+                actor.draw_geometry();
+                glDisable(GL_POLYGON_OFFSET_FILL);
+            }
+
             glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);
             glViewport(0, 0, width, height);
             glEnable(GL_DEPTH_TEST);
@@ -359,7 +379,8 @@ int main() {
             glClearBufferfv(GL_COLOR, 1, clear_ibl);
             glClear(GL_DEPTH_BUFFER_BIT);
 
-            ground.draw(v, p, ambientColor, aoCenter, aoRadius, floorY);
+            ground.draw(v, p, ambientColor, aoCenter, aoRadius, floorY,
+                sunShadow ? 1 : 0, sun.viewProj, sun.map.depth);
 
             if (environment.mode == 1 && environment.envCube != 0)
                 skybox.draw(v, p, environment.envCube);
@@ -456,6 +477,7 @@ int main() {
     ibl_texture_destroy(solidPrefilter);
     ibl_texture_destroy(brdfLut);
     hdrTarget.destroy();
+    sun.map.destroy();
     volumeDepth.destroy();
     ssao.destroy();
     quad.destroy();

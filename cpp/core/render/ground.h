@@ -43,7 +43,8 @@ struct Ground {
     }
 
     void draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& ambient,
-        const glm::vec2& aoCenter, float aoRadius, float floorY)
+        const glm::vec2& aoCenter, float aoRadius, float floorY,
+        int shadowEnabled = 0, const glm::mat4& lightViewProj = glm::mat4(1.f), GLuint shadowTex = 0)
     {
         shader.bind();
         shader.setMatrix4("viewMatrix", view);
@@ -54,6 +55,11 @@ struct Ground {
         shader.setFloat("aoRadius", aoRadius);
         shader.setFloat("aoStrength", aoStrength);
         shader.setFloat("fadeRadius", fadeRadius);
+        shader.setInt("shadowEnabled", shadowEnabled);
+        shader.setMatrix4("lightViewProj", lightViewProj);
+        shader.setInt("shadowMap", 6);
+        if (shadowEnabled != 0 && shadowTex != 0)
+            glBindTextureUnit(6, shadowTex);
 
         glBindVertexArray(vao);
         glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, nullptr);

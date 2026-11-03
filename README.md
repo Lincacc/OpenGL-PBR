@@ -24,3 +24,11 @@ ACES 色阶映射、屏幕空间 AO 模拟遮挡（非硬编码）、清漆双�
 <img src="assets/output-8.png" alt="output-8" width="32%">
 <img src="assets/output-9.png" alt="output-9" width="32%">
 </p>
+
+布料、mesh 可视化、光源阴影
+
+<p>
+<img src="assets/output-10.png" alt="output-10" width="32%">
+<img src="assets/output-11.png" alt="output-11" width="32%">
+<img src="assets/output-12.png" alt="output-12" width="32%">
+</p>

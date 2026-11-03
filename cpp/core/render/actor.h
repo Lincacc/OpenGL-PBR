@@ -94,6 +94,8 @@ struct Actor {
     bool meshInspect = false;
     int meshDrawMode = 0;
     glm::quat meshOrient{ 1.f, 0.f, 0.f, 0.f };
+    glm::vec3 localMin{ 0.f };
+    glm::vec3 localMax{ 0.f };
 
     glm::mat3 mesh_rotation() const {
         return glm::mat3_cast(glm::normalize(meshOrient));
@@ -103,12 +105,25 @@ struct Actor {
         sh.setMatrix3("meshRotation", mesh_rotation());
     }
 
+    void update_local_bounds() {
+        localMin = glm::vec3(1e9f);
+        localMax = glm::vec3(-1e9f);
+        for (const auto& pos : mesh.positions) {
+            localMin = glm::min(localMin, pos);
+            localMax = glm::max(localMax, pos);
+        }
+    }
+
     void rotated_bounds(glm::vec3& bmin, glm::vec3& bmax) const {
         const glm::mat3 R = mesh_rotation();
         bmin = glm::vec3(1e9f);
         bmax = glm::vec3(-1e9f);
-        for (const auto& pos : mesh.positions) {
-            const glm::vec3 p = R * pos;
+        for (int i = 0; i < 8; ++i) {
+            const glm::vec3 c(
+                (i & 1) ? localMax.x : localMin.x,
+                (i & 2) ? localMax.y : localMin.y,
+                (i & 4) ? localMax.z : localMin.z);
+            const glm::vec3 p = R * c;
             bmin = glm::min(bmin, p);
             bmax = glm::max(bmax, p);
         }
@@ -183,6 +198,7 @@ struct Actor {
         glVertexArrayAttribBinding(vao, 2, 0);
 
         indexCount = static_cast<GLsizei>(mesh.indices.size());
+        update_local_bounds();
         init_point_instances();
     }
 

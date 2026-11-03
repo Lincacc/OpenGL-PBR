@@ -184,7 +184,7 @@ int main() {
     actor.shader5.compile(vShaderCode5, fShaderCode5);
     actor.shader5Point.compile(vShaderCode5Point, fShaderCode5);
     actor.shaderShadow.compile(vShaderCodeShadow, fShaderCodeShadow);
-    actor.mesh = load_obj("cpp/resource/horse.obj");
+    actor.mesh = load_obj("cpp/resource/bunny.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
     actor.material.roughness = 0.1f;

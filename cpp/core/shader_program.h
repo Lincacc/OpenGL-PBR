@@ -19,6 +19,10 @@ struct Shader {
         glUniformMatrix4fv(glGetUniformLocation(programHandle, name.c_str()), 1, GL_FALSE, glm::value_ptr(matrix));
     }
 
+    void setMatrix3(const std::string& name, const glm::mat3& matrix) {
+        glUniformMatrix3fv(glGetUniformLocation(programHandle, name.c_str()), 1, GL_FALSE, glm::value_ptr(matrix));
+    }
+
     void setVec3f(const std::string& name, const glm::vec3& vec) {
         glUniform3fv(glGetUniformLocation(programHandle, name.c_str()), 1, glm::value_ptr(vec));
     }

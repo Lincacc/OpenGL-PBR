@@ -14,6 +14,7 @@
 #include <glm/glm.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -168,6 +169,12 @@ struct ViewOrbitAnim {
     float pitchTo = 0.f;
 };
 
+struct MeshOrientAnim {
+    float t = 1.f;
+    glm::quat from{ 1.f, 0.f, 0.f, 0.f };
+    glm::quat to{ 1.f, 0.f, 0.f, 0.f };
+};
+
 inline float wrap_pi(float a)
 {
     const float pi = glm::pi<float>();
@@ -220,6 +227,23 @@ inline void tick_view_orbit(ViewOrbitAnim& a, float& yaw, float& pitch, float dt
     const float w = smootherstep(a.t);
     yaw = glm::mix(a.yawFrom, a.yawTo, w);
     pitch = glm::mix(a.pitchFrom, a.pitchTo, w);
+}
+
+inline void begin_mesh_orient(MeshOrientAnim& a, glm::quat& q, const glm::vec3& axis, float radians)
+{
+    const glm::quat start = glm::normalize(q);
+    const glm::quat base = a.t < 1.f ? a.to : start;
+    a.from = start;
+    a.to = glm::normalize(glm::angleAxis(radians, axis) * base);
+    a.t = 0.f;
+}
+
+inline void tick_mesh_orient(MeshOrientAnim& a, glm::quat& q, float dt)
+{
+    if (a.t >= 1.f)
+        return;
+    a.t = std::min(1.f, a.t + dt / 0.35f);
+    q = glm::normalize(glm::slerp(a.from, a.to, smootherstep(a.t)));
 }
 
 inline bool point_in_poly(ImVec2 p, const ImVec2* pts, int n)
@@ -464,6 +488,30 @@ inline void draw_mesh_view_cube(float& orbitYaw, float& orbitPitch, ViewOrbitAni
         dl->AddCircleFilled(pv[hoverIdx], 5.f, IM_COL32(70, 110, 170, 255), 16);
 }
 
+inline void draw_mesh_orient_buttons(glm::quat& orient, MeshOrientAnim& anim)
+{
+    const float gap = ImGui::GetStyle().ItemSpacing.x;
+    const float label_w = ImGui::CalcTextSize("x:").x;
+    const float btn_w = std::max(40.f, (ImGui::GetContentRegionAvail().x - label_w - gap * 2.f) * 0.5f);
+    const ImVec2 btn(btn_w, 0.f);
+
+    auto row = [&](const char* label, const char* plus, const char* minus, const glm::vec3& axis) {
+        ImGui::PushID(label);
+        ImGui::AlignTextToFramePadding();
+        ImGui::Text("%s:", label);
+        ImGui::SameLine();
+        if (ImGui::Button(plus, btn))
+            begin_mesh_orient(anim, orient, axis, glm::half_pi<float>());
+        ImGui::SameLine();
+        if (ImGui::Button(minus, btn))
+            begin_mesh_orient(anim, orient, axis, -glm::half_pi<float>());
+        ImGui::PopID();
+    };
+    row("x", "+x", "-x", { 1.f, 0.f, 0.f });
+    row("y", "+y", "-y", { 0.f, 1.f, 0.f });
+    row("z", "+z", "-z", { 0.f, 0.f, 1.f });
+}
+
 inline void draw_preview_light_params(PreviewLight& L)
 {
     HeaderIndent indent;
@@ -565,7 +613,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    Material3& material3, Material4& material4, bool& meshInspect, int& meshDrawMode, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure,
+    Material3& material3, Material4& material4, bool& meshInspect, int& meshDrawMode, glm::quat& meshOrient, MeshOrientAnim& meshOrientAnim, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure,
     float& orbitYaw, float& orbitPitch, ViewOrbitAnim& viewAnim)
 {
     const ImGuiIO& io = ImGui::GetIO();
@@ -585,6 +633,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
     ImGui::Begin("operate", nullptr, flags);
 
     tick_view_orbit(viewAnim, orbitYaw, orbitPitch, ImGui::GetIO().DeltaTime);
+    tick_mesh_orient(meshOrientAnim, meshOrient, ImGui::GetIO().DeltaTime);
 
     if (ImGui::BeginTabBar("operate_tabs", ImGuiTabBarFlags_None)) {
         int tab = -1;
@@ -721,6 +770,10 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             }
             if (ImGui::CollapsingHeader("\xE8\xA7\x86\xE7\x82\xB9", ImGuiTreeNodeFlags_DefaultOpen))
                 draw_mesh_view_cube(orbitYaw, orbitPitch, viewAnim);
+            if (ImGui::CollapsingHeader("\xE6\x97\x8B\xE8\xBD\xAC", ImGuiTreeNodeFlags_DefaultOpen)) {
+                HeaderIndent indent;
+                draw_mesh_orient_buttons(meshOrient, meshOrientAnim);
+            }
             if (ImGui::CollapsingHeader("\xE7\xBD\x91\xE6\xA0\xBC")) {
                 HeaderIndent indent;
                 const char* drawModes[] = { "face", "point", "wireframe" };

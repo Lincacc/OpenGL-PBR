@@ -11,14 +11,16 @@ const std::string vShaderCode5 = R"(
 
     uniform mat4 viewMatrix;
     uniform mat4 projectionMatrix;
+    uniform mat3 meshRotation;
 
     out vec3 vWorldPos;
     out vec3 vNormal;
 
     void main() {
-        vWorldPos = aPos;
-        vNormal = aNormal;
-        gl_Position = projectionMatrix * viewMatrix * vec4(aPos, 1.0);
+        vec3 worldPos = meshRotation * aPos;
+        vWorldPos = worldPos;
+        vNormal = meshRotation * aNormal;
+        gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
     }
 )";
 
@@ -31,14 +33,16 @@ const std::string vShaderCode5Point = R"(
 
     uniform mat4 viewMatrix;
     uniform mat4 projectionMatrix;
+    uniform mat3 meshRotation;
     uniform float pointRadius;
 
     out vec3 vWorldPos;
     out vec3 vNormal;
 
     void main() {
-        vNormal = aNormal;
-        vWorldPos = aInstancePos + aPos * pointRadius;
+        vec3 local = aInstancePos + aPos * pointRadius;
+        vNormal = meshRotation * aNormal;
+        vWorldPos = meshRotation * local;
         gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0);
     }
 )";

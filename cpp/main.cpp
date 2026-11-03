@@ -50,6 +50,7 @@ float orbitYaw = 0.f;
 float orbitPitch = 0.4f;
 float orbitRadius = 4.f;
 ViewOrbitAnim viewAnim;
+MeshOrientAnim meshOrientAnim;
 bool orbitDragging = false;
 double orbitLastX = 0.0;
 double orbitLastY = 0.0;
@@ -208,14 +209,11 @@ int main() {
     actor.material4.cloth = 1.f;
     actor.init();
 
-    glm::vec3 bmin(1e9f), bmax(-1e9f);
-    for (const auto& pos : actor.mesh.positions) {
-        bmin = glm::min(bmin, pos);
-        bmax = glm::max(bmax, pos);
-    }
-    const float floorY = bmin.y - 0.002f;
-    const glm::vec2 aoCenter = (glm::vec2(bmin.x, bmin.z) + glm::vec2(bmax.x, bmax.z)) * 0.5f;
-    const float aoRadius = 0.55f * glm::length(glm::vec2(bmax.x - bmin.x, bmax.z - bmin.z));
+    glm::vec3 bmin, bmax;
+    actor.rotated_bounds(bmin, bmax);
+    float floorY = bmin.y - 0.002f;
+    glm::vec2 aoCenter = (glm::vec2(bmin.x, bmin.z) + glm::vec2(bmax.x, bmax.z)) * 0.5f;
+    float aoRadius = 0.55f * glm::length(glm::vec2(bmax.x - bmin.x, bmax.z - bmin.z));
 
     Ground ground;
     ground.init(floorY, 4.f);
@@ -257,9 +255,13 @@ int main() {
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.meshDrawMode, actor.mesh, environment, ssao, exposure,
+            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.meshDrawMode, actor.meshOrient, meshOrientAnim, actor.mesh, environment, ssao, exposure,
             orbitYaw, orbitPitch, viewAnim);
         apply_orbit();
+        actor.rotated_bounds(bmin, bmax);
+        floorY = bmin.y - 0.002f;
+        aoCenter = (glm::vec2(bmin.x, bmin.z) + glm::vec2(bmax.x, bmax.z)) * 0.5f;
+        aoRadius = 0.55f * glm::length(glm::vec2(bmax.x - bmin.x, bmax.z - bmin.z));
 
         camera.aspect = float(width) / float(height);
         const auto& v = camera.view();
@@ -288,7 +290,7 @@ int main() {
             glClearBufferfv(GL_COLOR, 1, clear_ibl);
             glClear(GL_DEPTH_BUFFER_BIT);
 
-            ground.draw(v, p, inspectGray, aoCenter, aoRadius);
+            ground.draw(v, p, inspectGray, aoCenter, aoRadius, floorY);
 
             Shader& sh = actor.active_shader();
             sh.bind();
@@ -356,7 +358,7 @@ int main() {
             glClearBufferfv(GL_COLOR, 1, clear_ibl);
             glClear(GL_DEPTH_BUFFER_BIT);
 
-            ground.draw(v, p, ambientColor, aoCenter, aoRadius);
+            ground.draw(v, p, ambientColor, aoCenter, aoRadius, floorY);
 
             if (environment.mode == 1 && environment.envCube != 0)
                 skybox.draw(v, p, environment.envCube);
@@ -373,6 +375,7 @@ int main() {
                 actor.shader2Depth.bind();
                 actor.shader2Depth.setMatrix4("viewMatrix", v);
                 actor.shader2Depth.setMatrix4("projectionMatrix", p);
+                actor.bind_transform(actor.shader2Depth);
                 actor.draw_geometry();
 
                 glBindFramebuffer(GL_FRAMEBUFFER, hdrTarget.msaaFbo);

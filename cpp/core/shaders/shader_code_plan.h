@@ -9,12 +9,14 @@ const std::string vGroundShaderCode = R"(
 
     uniform mat4 viewMatrix;
     uniform mat4 projectionMatrix;
+    uniform float floorY;
 
     out vec3 vWorldPos;
 
     void main() {
-        vWorldPos = aPos;
-        gl_Position = projectionMatrix * viewMatrix * vec4(aPos, 1.0);
+        vec3 wp = vec3(aPos.x, floorY, aPos.z);
+        vWorldPos = wp;
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
     }
 )";
 

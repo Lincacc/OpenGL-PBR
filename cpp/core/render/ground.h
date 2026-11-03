@@ -43,11 +43,12 @@ struct Ground {
     }
 
     void draw(const glm::mat4& view, const glm::mat4& proj, const glm::vec3& ambient,
-        const glm::vec2& aoCenter, float aoRadius)
+        const glm::vec2& aoCenter, float aoRadius, float floorY)
     {
         shader.bind();
         shader.setMatrix4("viewMatrix", view);
         shader.setMatrix4("projectionMatrix", proj);
+        shader.setFloat("floorY", floorY);
         shader.setVec3f("ambientColor", ambient);
         shader.setVec2f("aoCenter", aoCenter);
         shader.setFloat("aoRadius", aoRadius);

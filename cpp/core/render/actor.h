@@ -9,6 +9,8 @@
 #include "core/materials/material_4.h"
 #include "core/materials/material_5.h"
 
+#include <glm/gtc/quaternion.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -90,6 +92,26 @@ struct Actor {
     int materialId = 0;
     bool meshInspect = false;
     int meshDrawMode = 0;
+    glm::quat meshOrient{ 1.f, 0.f, 0.f, 0.f };
+
+    glm::mat3 mesh_rotation() const {
+        return glm::mat3_cast(glm::normalize(meshOrient));
+    }
+
+    void bind_transform(Shader& sh) const {
+        sh.setMatrix3("meshRotation", mesh_rotation());
+    }
+
+    void rotated_bounds(glm::vec3& bmin, glm::vec3& bmax) const {
+        const glm::mat3 R = mesh_rotation();
+        bmin = glm::vec3(1e9f);
+        bmax = glm::vec3(-1e9f);
+        for (const auto& pos : mesh.positions) {
+            const glm::vec3 p = R * pos;
+            bmin = glm::min(bmin, p);
+            bmax = glm::max(bmax, p);
+        }
+    }
 
     GLuint vao = 0, vbo = 0, ebo = 0;
     GLsizei indexCount = 0;
@@ -226,6 +248,7 @@ struct Actor {
 
     void draw() {
         Shader& sh = active_shader();
+        bind_transform(sh);
         if (meshInspect) {
             sh.setVec3f("albedo", material5.albedo);
             sh.setVec3f("rim", material5.rim);

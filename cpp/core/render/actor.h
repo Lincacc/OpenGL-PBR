@@ -186,6 +186,54 @@ struct Actor {
         init_point_instances();
     }
 
+    void destroy_geometry() {
+        if (vao != 0) {
+            glDeleteVertexArrays(1, &vao);
+            vao = 0;
+        }
+        if (vbo != 0) {
+            glDeleteBuffers(1, &vbo);
+            vbo = 0;
+        }
+        if (ebo != 0) {
+            glDeleteBuffers(1, &ebo);
+            ebo = 0;
+        }
+        if (pointVao != 0) {
+            glDeleteVertexArrays(1, &pointVao);
+            pointVao = 0;
+        }
+        if (sphereVbo != 0) {
+            glDeleteBuffers(1, &sphereVbo);
+            sphereVbo = 0;
+        }
+        if (sphereEbo != 0) {
+            glDeleteBuffers(1, &sphereEbo);
+            sphereEbo = 0;
+        }
+        if (instanceVbo != 0) {
+            glDeleteBuffers(1, &instanceVbo);
+            instanceVbo = 0;
+        }
+        indexCount = 0;
+        sphereIndexCount = 0;
+        instanceCount = 0;
+    }
+
+    void set_mesh(ObjMesh next) {
+        ObjMesh prev = std::move(mesh);
+        destroy_geometry();
+        mesh = std::move(next);
+        try {
+            init();
+        } catch (...) {
+            destroy_geometry();
+            mesh = std::move(prev);
+            init();
+            throw;
+        }
+    }
+
     void init_point_instances() {
         std::vector<Vertex> sphereVerts;
         std::vector<uint32_t> sphereIdx;

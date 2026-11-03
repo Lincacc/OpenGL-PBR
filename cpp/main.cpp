@@ -24,6 +24,7 @@
 #include "core/materials/material_5.h"
 #include "core/camera.h"
 #include "ui/operate_pannel.h"
+#include "ui/tool_bar.h"
 
 #include <GLFW/glfw3.h>
 
@@ -258,6 +259,7 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        draw_tool_bar(actor, meshOrientAnim);
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
             actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.meshDrawMode, actor.meshOrient, meshOrientAnim, actor.mesh, environment, ssao, exposure,
             orbitYaw, orbitPitch, viewAnim);
@@ -276,9 +278,10 @@ int main() {
         char text[128];
         std::snprintf(text, sizeof(text), "fps %.1f\ncpu %.0f%%\ngpu %.0f%%",
             ImGui::GetIO().Framerate, usage.cpu, usage.gpu);
-        ImDrawList* draw_list = ImGui::GetForegroundDrawList();
-        draw_list->AddText(ImVec2(9.f, 9.f), IM_COL32(0, 0, 0, 180), text);
-        draw_list->AddText(ImVec2(8.f, 8.f), IM_COL32(255, 255, 255, 255), text);
+        const float hud_y = ImGui::GetFrameHeight() + 8.f;
+        ImDrawList* draw_list = ImGui::GetBackgroundDrawList();
+        draw_list->AddText(ImVec2(9.f, hud_y + 1.f), IM_COL32(0, 0, 0, 180), text);
+        draw_list->AddText(ImVec2(8.f, hud_y), IM_COL32(255, 255, 255, 255), text);
         draw_world_axes(v);
 #pragma endregion
 

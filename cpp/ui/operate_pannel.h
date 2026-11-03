@@ -662,9 +662,10 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
-    const float panel_h = io.DisplaySize.y;
+    const float top = ImGui::GetFrameHeight();
+    const float panel_h = io.DisplaySize.y - top;
 
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panel_w, 0.f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - panel_w, top), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(panel_w, panel_h), ImGuiCond_Always);
 
     const ImGuiWindowFlags flags =

@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -459,4 +460,45 @@ inline ObjMesh load_obj(const std::filesystem::path& path) {
     ObjMesh mesh = obj_detail::parse_obj_text(path);
     obj_detail::save_mesh_cache(cache, mesh);
     return mesh;
+}
+
+inline void save_obj(const std::filesystem::path& path, const ObjMesh& mesh) {
+    auto ext = path.extension().string();
+    for (char& c : ext)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (ext != ".obj")
+        throw std::runtime_error("only .obj is supported: " + path.string());
+    if (mesh.positions.size() != mesh.normals.size() ||
+        mesh.positions.size() != mesh.uvs.size()) {
+        throw std::runtime_error("mesh attribute size mismatch, cannot save: " + path.string());
+    }
+    if (mesh.positions.empty() || mesh.indices.empty() || (mesh.indices.size() % 3) != 0)
+        throw std::runtime_error("cannot save empty mesh: " + path.string());
+    for (uint32_t i : mesh.indices) {
+        if (i >= mesh.positions.size())
+            throw std::runtime_error("mesh index out of range, cannot save: " + path.string());
+    }
+
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out)
+        throw std::runtime_error("cannot write obj: " + path.string());
+
+    out << std::setprecision(9);
+    for (const auto& p : mesh.positions)
+        out << "v " << p.x << ' ' << p.y << ' ' << p.z << '\n';
+    for (const auto& t : mesh.uvs)
+        out << "vt " << t.x << ' ' << t.y << '\n';
+    for (const auto& n : mesh.normals)
+        out << "vn " << n.x << ' ' << n.y << ' ' << n.z << '\n';
+    for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+        const uint32_t a = mesh.indices[i] + 1;
+        const uint32_t b = mesh.indices[i + 1] + 1;
+        const uint32_t c = mesh.indices[i + 2] + 1;
+        out << "f " << a << '/' << a << '/' << a << ' '
+            << b << '/' << b << '/' << b << ' '
+            << c << '/' << c << '/' << c << '\n';
+    }
+    out.flush();
+    if (!out)
+        throw std::runtime_error("failed writing obj: " + path.string());
 }

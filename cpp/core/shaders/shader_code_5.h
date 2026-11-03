@@ -22,6 +22,27 @@ const std::string vShaderCode5 = R"(
     }
 )";
 
+const std::string vShaderCode5Point = R"(
+    #version 460 core
+
+    layout(location = 0) in vec3 aPos;
+    layout(location = 1) in vec3 aNormal;
+    layout(location = 3) in vec3 aInstancePos;
+
+    uniform mat4 viewMatrix;
+    uniform mat4 projectionMatrix;
+    uniform float pointRadius;
+
+    out vec3 vWorldPos;
+    out vec3 vNormal;
+
+    void main() {
+        vNormal = aNormal;
+        vWorldPos = aInstancePos + aPos * pointRadius;
+        gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0);
+    }
+)";
+
 const std::string fShaderCode5 = R"(
     #version 460 core
 

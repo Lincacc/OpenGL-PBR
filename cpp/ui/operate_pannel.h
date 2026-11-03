@@ -565,7 +565,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    Material3& material3, Material4& material4, bool& meshInspect, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure,
+    Material3& material3, Material4& material4, bool& meshInspect, int& meshDrawMode, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure,
     float& orbitYaw, float& orbitPitch, ViewOrbitAnim& viewAnim)
 {
     const ImGuiIO& io = ImGui::GetIO();
@@ -723,9 +723,8 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
                 draw_mesh_view_cube(orbitYaw, orbitPitch, viewAnim);
             if (ImGui::CollapsingHeader("\xE7\xBD\x91\xE6\xA0\xBC")) {
                 HeaderIndent indent;
-                static int drawMode = 0;
                 const char* drawModes[] = { "face", "point", "wireframe" };
-                ImGui::Combo("##mesh_draw_mode", &drawMode, drawModes, IM_ARRAYSIZE(drawModes));
+                ImGui::Combo("##mesh_draw_mode", &meshDrawMode, drawModes, IM_ARRAYSIZE(drawModes));
             }
             ImGui::EndTabItem();
         }

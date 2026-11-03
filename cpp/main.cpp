@@ -177,7 +177,8 @@ int main() {
     actor.shader3.compile(vShaderCode3, fShaderCode3);
     actor.shader4.compile(vShaderCode4, fShaderCode4);
     actor.shader5.compile(vShaderCode5, fShaderCode5);
-    actor.mesh = load_obj("cpp/resource/bunny.obj");
+    actor.shader5Point.compile(vShaderCode5Point, fShaderCode5);
+    actor.mesh = load_obj("cpp/resource/horse.obj");
     actor.material.albedo = glm::vec3(1, 0, 1);
     actor.material.metallic = 0.f;
     actor.material.roughness = 0.1f;
@@ -256,7 +257,7 @@ int main() {
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.mesh, environment, ssao, exposure,
+            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.meshDrawMode, actor.mesh, environment, ssao, exposure,
             orbitYaw, orbitPitch, viewAnim);
         apply_orbit();
 

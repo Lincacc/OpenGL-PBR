@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 struct LightGizmo {
     float yaw = 0.785398f;
@@ -32,6 +33,13 @@ struct PreviewLight {
     float sat = 0.7f;
     float val = 1.f;
     float intensity = 1.f;
+};
+
+struct HeaderIndent {
+    HeaderIndent() { ImGui::Indent(); }
+    ~HeaderIndent() { ImGui::Unindent(); }
+    HeaderIndent(const HeaderIndent&) = delete;
+    HeaderIndent& operator=(const HeaderIndent&) = delete;
 };
 
 inline LightGizmo light_gizmo_from_dir(const glm::vec3& dir) {
@@ -152,8 +160,313 @@ inline void light_yaw_ring(const char* id, LightGizmo& g, PreviewLight& preview,
     ImGui::PopID();
 }
 
+struct ViewOrbitAnim {
+    float t = 1.f;
+    float yawFrom = 0.f;
+    float yawTo = 0.f;
+    float pitchFrom = 0.f;
+    float pitchTo = 0.f;
+};
+
+inline float wrap_pi(float a)
+{
+    const float pi = glm::pi<float>();
+    while (a > pi) a -= 2.f * pi;
+    while (a < -pi) a += 2.f * pi;
+    return a;
+}
+
+inline float smootherstep(float t)
+{
+    t = std::clamp(t, 0.f, 1.f);
+    return t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+}
+
+inline glm::vec3 orbit_dir(float yaw, float pitch)
+{
+    const float cp = std::cos(pitch);
+    return glm::normalize(glm::vec3(cp * std::cos(yaw), std::sin(pitch), cp * std::sin(yaw)));
+}
+
+inline void dir_to_orbit(const glm::vec3& d, float& yaw, float& pitch)
+{
+    const glm::vec3 n = glm::normalize(d);
+    pitch = std::clamp(std::asin(std::clamp(n.y, -1.f, 1.f)), -1.55f, 1.55f);
+    yaw = std::atan2(n.z, n.x);
+}
+
+inline void begin_view_orbit(ViewOrbitAnim& a, float cy, float cp, const glm::vec3& dir)
+{
+    float ty = 0.f;
+    float tp = 0.f;
+    dir_to_orbit(dir, ty, tp);
+    const float dy = wrap_pi(ty - cy);
+    if (std::fabs(dy) < 1e-3f && std::fabs(tp - cp) < 1e-3f) {
+        a.t = 1.f;
+        return;
+    }
+    a.yawFrom = cy;
+    a.yawTo = cy + dy;
+    a.pitchFrom = cp;
+    a.pitchTo = tp;
+    a.t = 0.f;
+}
+
+inline void tick_view_orbit(ViewOrbitAnim& a, float& yaw, float& pitch, float dt)
+{
+    if (a.t >= 1.f)
+        return;
+    a.t = std::min(1.f, a.t + dt / 0.35f);
+    const float w = smootherstep(a.t);
+    yaw = glm::mix(a.yawFrom, a.yawTo, w);
+    pitch = glm::mix(a.pitchFrom, a.pitchTo, w);
+}
+
+inline bool point_in_poly(ImVec2 p, const ImVec2* pts, int n)
+{
+    auto cross = [](ImVec2 o, ImVec2 u, ImVec2 v) {
+        return (u.x - o.x) * (v.y - o.y) - (u.y - o.y) * (v.x - o.x);
+    };
+    bool pos = true;
+    bool neg = true;
+    for (int i = 0; i < n; ++i) {
+        const float c = cross(p, pts[i], pts[(i + 1) % n]);
+        pos = pos && c >= 0.f;
+        neg = neg && c <= 0.f;
+    }
+    return pos || neg;
+}
+
+inline float dist_to_seg(ImVec2 p, ImVec2 a, ImVec2 b)
+{
+    const float vx = b.x - a.x;
+    const float vy = b.y - a.y;
+    const float len2 = vx * vx + vy * vy;
+    float t = 0.f;
+    if (len2 > 1e-6f)
+        t = std::clamp(((p.x - a.x) * vx + (p.y - a.y) * vy) / len2, 0.f, 1.f);
+    const float dx = p.x - (a.x + vx * t);
+    const float dy = p.y - (a.y + vy * t);
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+inline void draw_mesh_view_cube(float& orbitYaw, float& orbitPitch, ViewOrbitAnim& anim)
+{
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float box = std::clamp(avail * 0.48f, 108.f, 136.f);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + std::max(0.f, (avail - box) * 0.5f));
+
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("mesh_view_cube", ImVec2(box, box));
+    const ImVec2 center(cursor.x + box * 0.5f, cursor.y + box * 0.5f);
+    const float scale = box * 0.26f;
+    const float handleR = 4.5f;
+    const glm::vec3 eye = orbit_dir(orbitYaw, orbitPitch);
+    glm::vec3 up(0.f, 1.f, 0.f);
+    if (std::abs(glm::dot(eye, up)) > 0.995f)
+        up = glm::vec3(-std::sin(orbitYaw), 0.f, std::cos(orbitYaw));
+    const glm::vec3 fwd = -eye;
+    glm::vec3 right = glm::cross(fwd, up);
+    if (glm::dot(right, right) < 1e-8f)
+        right = glm::vec3(1.f, 0.f, 0.f);
+    right = glm::normalize(right);
+    up = glm::cross(right, fwd);
+
+    auto proj = [&](const glm::vec3& p) {
+        return ImVec2(center.x + glm::dot(p, right) * scale, center.y - glm::dot(p, up) * scale);
+    };
+
+    glm::vec3 vtx[8];
+    ImVec2 pv[8];
+    for (int i = 0; i < 8; ++i) {
+        vtx[i] = glm::vec3((i & 1) ? 1.f : -1.f, (i & 2) ? 1.f : -1.f, (i & 4) ? 1.f : -1.f);
+        pv[i] = proj(vtx[i]);
+    }
+
+    const int faceV[6][4] = {
+        { 1, 3, 7, 5 }, { 0, 4, 6, 2 },
+        { 2, 3, 7, 6 }, { 0, 1, 5, 4 },
+        { 4, 5, 7, 6 }, { 0, 2, 3, 1 },
+    };
+    const glm::vec3 faceN[6] = {
+        { 1.f, 0.f, 0.f }, { -1.f, 0.f, 0.f },
+        { 0.f, 1.f, 0.f }, { 0.f, -1.f, 0.f },
+        { 0.f, 0.f, 1.f }, { 0.f, 0.f, -1.f },
+    };
+    const char* faceL[6] = {
+        "\xE5\x8F\xB3", "\xE5\xB7\xA6",
+        "\xE4\xB8\x8A", "\xE4\xB8\x8B",
+        "\xE5\x89\x8D", "\xE5\x90\x8E",
+    };
+    const int edgeV[12][2] = {
+        { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 },
+        { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
+        { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 },
+    };
+
+    float faceF[6];
+    int faceOrder[6] = { 0, 1, 2, 3, 4, 5 };
+    for (int i = 0; i < 6; ++i)
+        faceF[i] = glm::dot(faceN[i], eye);
+    std::sort(faceOrder, faceOrder + 6, [&](int a, int b) { return faceF[a] < faceF[b]; });
+
+    int front = 0;
+    for (int i = 1; i < 6; ++i) {
+        if (faceF[i] > faceF[front])
+            front = i;
+    }
+    const bool ortho = faceF[front] > 0.92f;
+
+    ImVec2 ncirc[4]{};
+    glm::vec3 ncircDir[4]{};
+    int ncircN = 0;
+    if (ortho) {
+        for (int i = 0; i < 6; ++i) {
+            if (i == front || i == (front ^ 1))
+                continue;
+            int sh[2] = { -1, -1 };
+            int ns = 0;
+            for (int a = 0; a < 4; ++a) {
+                for (int b = 0; b < 4; ++b) {
+                    if (faceV[front][a] == faceV[i][b] && ns < 2)
+                        sh[ns++] = faceV[front][a];
+                }
+            }
+            if (ns < 2)
+                continue;
+            const ImVec2 mid((pv[sh[0]].x + pv[sh[1]].x) * 0.5f, (pv[sh[0]].y + pv[sh[1]].y) * 0.5f);
+            ImVec2 out(mid.x - center.x, mid.y - center.y);
+            const float olen = std::sqrt(out.x * out.x + out.y * out.y);
+            if (olen < 1e-3f)
+                continue;
+            out.x /= olen;
+            out.y /= olen;
+            const float gap = 7.f;
+            ncirc[ncircN] = ImVec2(mid.x + out.x * (gap + handleR), mid.y + out.y * (gap + handleR));
+            ncircDir[ncircN] = faceN[i];
+            ++ncircN;
+        }
+    }
+
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    int hoverKind = -1;
+    int hoverIdx = -1;
+    glm::vec3 hoverDir(0.f);
+
+    for (int i = 0; i < 8; ++i) {
+        if (glm::dot(vtx[i], eye) < -0.2f)
+            continue;
+        const float dx = mouse.x - pv[i].x;
+        const float dy = mouse.y - pv[i].y;
+        if (dx * dx + dy * dy <= (handleR + 5.f) * (handleR + 5.f)) {
+            hoverKind = 2;
+            hoverIdx = i;
+            hoverDir = glm::normalize(vtx[i]);
+        }
+    }
+    if (hoverKind < 0) {
+        for (int i = 0; i < ncircN; ++i) {
+            const float dx = mouse.x - ncirc[i].x;
+            const float dy = mouse.y - ncirc[i].y;
+            if (dx * dx + dy * dy <= (handleR + 5.f) * (handleR + 5.f)) {
+                hoverKind = 3;
+                hoverIdx = i;
+                hoverDir = ncircDir[i];
+                break;
+            }
+        }
+    }
+    if (hoverKind < 0 && !ortho) {
+        float best = 7.f;
+        for (int i = 0; i < 12; ++i) {
+            const int a = edgeV[i][0];
+            const int b = edgeV[i][1];
+            if (glm::dot(vtx[a] + vtx[b], eye) < 0.f)
+                continue;
+            const float d = dist_to_seg(mouse, pv[a], pv[b]);
+            if (d < best) {
+                best = d;
+                hoverKind = 1;
+                hoverIdx = i;
+                hoverDir = glm::normalize(vtx[a] + vtx[b]);
+            }
+        }
+    }
+    if (hoverKind < 0) {
+        for (int k = 5; k >= 0; --k) {
+            const int i = faceOrder[k];
+            if (faceF[i] < 0.02f)
+                continue;
+            ImVec2 q[4] = { pv[faceV[i][0]], pv[faceV[i][1]], pv[faceV[i][2]], pv[faceV[i][3]] };
+            if (point_in_poly(mouse, q, 4)) {
+                hoverKind = 0;
+                hoverIdx = i;
+                hoverDir = faceN[i];
+                break;
+            }
+        }
+    }
+
+    if (ImGui::IsItemActivated() && hoverKind >= 0)
+        begin_view_orbit(anim, orbitYaw, orbitPitch, hoverDir);
+    if (hoverKind >= 0)
+        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImU32 edgeCol = IM_COL32(150, 150, 154, 255);
+    const ImU32 ink = IM_COL32(80, 80, 84, 255);
+    const ImU32 hot_fill = IM_COL32(186, 198, 214, 255);
+
+    for (int k = 0; k < 6; ++k) {
+        const int i = faceOrder[k];
+        if (faceF[i] < 0.02f)
+            continue;
+        ImVec2 q[4] = { pv[faceV[i][0]], pv[faceV[i][1]], pv[faceV[i][2]], pv[faceV[i][3]] };
+        const float cr = (q[1].x - q[0].x) * (q[2].y - q[0].y) - (q[1].y - q[0].y) * (q[2].x - q[0].x);
+        if (cr < 0.f) {
+            std::swap(q[1], q[3]);
+        }
+        const float shade = std::clamp(0.62f + 0.28f * faceF[i], 0.55f, 0.92f);
+        const int g = int(shade * 255.f);
+        const bool hot = (hoverKind == 0 && hoverIdx == i);
+        const ImU32 fill = hot ? hot_fill : IM_COL32(g, g, g, 255);
+        dl->AddConvexPolyFilled(q, 4, fill);
+        dl->AddPolyline(q, 4, edgeCol, ImDrawFlags_Closed, 1.6f);
+        if (faceF[i] > 0.22f) {
+            const ImVec2 mid(
+                (q[0].x + q[1].x + q[2].x + q[3].x) * 0.25f,
+                (q[0].y + q[1].y + q[2].y + q[3].y) * 0.25f);
+            const ImVec2 ts = ImGui::CalcTextSize(faceL[i]);
+            dl->AddText(ImVec2(mid.x - ts.x * 0.5f, mid.y - ts.y * 0.5f), ink, faceL[i]);
+        }
+    }
+
+    if (ortho) {
+        for (int i = 0; i < 4; ++i) {
+            const int vi = faceV[front][i];
+            const bool hot = (hoverKind == 2 && hoverIdx == vi);
+            dl->AddCircleFilled(pv[vi], handleR, hot ? IM_COL32(70, 110, 170, 255) : IM_COL32(236, 236, 238, 255), 14);
+            dl->AddCircle(pv[vi], handleR, hot ? IM_COL32(70, 110, 170, 255) : edgeCol, 14, 1.3f);
+        }
+        for (int i = 0; i < ncircN; ++i) {
+            const bool hot = (hoverKind == 3 && hoverIdx == i);
+            dl->AddCircleFilled(ncirc[i], handleR, hot ? IM_COL32(70, 110, 170, 255) : IM_COL32(236, 236, 238, 255), 14);
+            dl->AddCircle(ncirc[i], handleR, hot ? IM_COL32(70, 110, 170, 255) : edgeCol, 14, 1.3f);
+        }
+    }
+
+    if (hoverKind == 1) {
+        const int a = edgeV[hoverIdx][0];
+        const int b = edgeV[hoverIdx][1];
+        dl->AddLine(pv[a], pv[b], IM_COL32(70, 110, 170, 255), 3.2f);
+    }
+    if (hoverKind == 2 && !ortho)
+        dl->AddCircleFilled(pv[hoverIdx], 5.f, IM_COL32(70, 110, 170, 255), 16);
+}
+
 inline void draw_preview_light_params(PreviewLight& L)
 {
+    HeaderIndent indent;
     ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &L.enabled);
     ImGui::BeginDisabled(!L.enabled);
 
@@ -200,6 +513,7 @@ inline void draw_environment_panel(EnvironmentSettings& env)
     if (!ImGui::CollapsingHeader("\xE7\x8E\xAF\xE5\xA2\x83"))
         return;
 
+    HeaderIndent indent;
     ImGui::RadioButton("Solid", &env.mode, 0);
     ImGui::SameLine();
     ImGui::RadioButton("HDR", &env.mode, 1);
@@ -251,7 +565,8 @@ inline void draw_environment_panel(EnvironmentSettings& env)
 
 inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gizmo,
     int& materialId, Material& material, Material1& material1, Material2& material2,
-    Material3& material3, Material4& material4, bool& meshInspect, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure)
+    Material3& material3, Material4& material4, bool& meshInspect, const ObjMesh& mesh, EnvironmentSettings& env, Ssao& ssao, float& exposure,
+    float& orbitYaw, float& orbitPitch, ViewOrbitAnim& viewAnim)
 {
     const ImGuiIO& io = ImGui::GetIO();
     const float panel_w = std::clamp(io.DisplaySize.x * 0.22f, 240.f, 380.f);
@@ -268,6 +583,8 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
         ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     ImGui::Begin("operate", nullptr, flags);
+
+    tick_view_orbit(viewAnim, orbitYaw, orbitPitch, ImGui::GetIO().DeltaTime);
 
     if (ImGui::BeginTabBar("operate_tabs", ImGuiTabBarFlags_None)) {
         int tab = -1;
@@ -293,10 +610,12 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             draw_environment_panel(env);
 
             if (ImGui::CollapsingHeader("exposure")) {
+                HeaderIndent indent;
                 ImGui::SliderFloat("EV", &exposure, -4.f, 4.f, "%.1f");
             }
 
             if (ImGui::CollapsingHeader("SSAO")) {
+                HeaderIndent indent;
                 ImGui::Checkbox("enabled", &ssao.enabled);
                 ImGui::BeginDisabled(!ssao.enabled);
                 ImGui::SliderFloat("radius", &ssao.radius, 0.05f, 2.f, "%.2f");
@@ -311,6 +630,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
             tab = 1;
             ImGui::PushID(0);
             if (ImGui::CollapsingHeader("standard", ImGuiTreeNodeFlags_DefaultOpen)) {
+                HeaderIndent indent;
                 bool use0 = (materialId == 0);
                 if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use0) && use0)
                     materialId = 0;
@@ -324,6 +644,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
             ImGui::PushID(1);
             if (ImGui::CollapsingHeader("clearcoat")) {
+                HeaderIndent indent;
                 bool use1 = (materialId == 1);
                 if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use1) && use1)
                     materialId = 1;
@@ -340,6 +661,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
             ImGui::PushID(2);
             if (ImGui::CollapsingHeader("transmission")) {
+                HeaderIndent indent;
                 bool use2 = (materialId == 2);
                 if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use2) && use2)
                     materialId = 2;
@@ -356,6 +678,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
             ImGui::PushID(3);
             if (ImGui::CollapsingHeader("subsurface")) {
+                HeaderIndent indent;
                 bool use3 = (materialId == 3);
                 if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use3) && use3)
                     materialId = 3;
@@ -372,6 +695,7 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
             ImGui::PushID(4);
             if (ImGui::CollapsingHeader("cloth")) {
+                HeaderIndent indent;
                 bool use4 = (materialId == 4);
                 if (ImGui::Checkbox("\xE5\x90\xAF\xE7\x94\xA8", &use4) && use4)
                     materialId = 4;
@@ -390,8 +714,19 @@ inline void draw_operate_pannel(int fb_w, int fb_h, Light& light, LightGizmo& gi
 
         if (ImGui::BeginTabItem("mesh")) {
             tab = 2;
-            ImGui::Text("vertices  %zu", mesh.positions.size());
-            ImGui::Text("triangles %zu", mesh.indices.size() / 3);
+            if (ImGui::CollapsingHeader("\xE7\xBB\x9F\xE8\xAE\xA1\xE4\xBF\xA1\xE6\x81\xAF", ImGuiTreeNodeFlags_DefaultOpen)) {
+                HeaderIndent indent;
+                ImGui::Text("vertices  %zu", mesh.positions.size());
+                ImGui::Text("triangles %zu", mesh.indices.size() / 3);
+            }
+            if (ImGui::CollapsingHeader("\xE8\xA7\x86\xE7\x82\xB9", ImGuiTreeNodeFlags_DefaultOpen))
+                draw_mesh_view_cube(orbitYaw, orbitPitch, viewAnim);
+            if (ImGui::CollapsingHeader("\xE7\xBD\x91\xE6\xA0\xBC")) {
+                HeaderIndent indent;
+                static int drawMode = 0;
+                const char* drawModes[] = { "face", "point", "wireframe" };
+                ImGui::Combo("##mesh_draw_mode", &drawMode, drawModes, IM_ARRAYSIZE(drawModes));
+            }
             ImGui::EndTabItem();
         }
 

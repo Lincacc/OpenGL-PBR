@@ -49,6 +49,7 @@ Camera camera;
 float orbitYaw = 0.f;
 float orbitPitch = 0.4f;
 float orbitRadius = 4.f;
+ViewOrbitAnim viewAnim;
 bool orbitDragging = false;
 double orbitLastX = 0.0;
 double orbitLastY = 0.0;
@@ -88,6 +89,7 @@ static void cursor_pos_callback(GLFWwindow* window, double x, double y) {
     orbitYaw += float(x - orbitLastX) * 0.005f;
     orbitPitch += float(orbitLastY - y) * 0.005f;
     orbitPitch = std::clamp(orbitPitch, -1.55f, 1.55f);
+    viewAnim.t = 1.f;
 
     orbitLastX = x;
     orbitLastY = y;
@@ -249,16 +251,18 @@ int main() {
         if (width <= 0 || height <= 0)
             continue;
 
-        camera.aspect = float(width) / float(height);
-        const auto& v = camera.view();
-        const auto& p = camera.project();
-
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         draw_operate_pannel(width, height, sun, sun_gizmo, actor.materialId, actor.material,
-            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.mesh, environment, ssao, exposure);
+            actor.material1, actor.material2, actor.material3, actor.material4, actor.meshInspect, actor.mesh, environment, ssao, exposure,
+            orbitYaw, orbitPitch, viewAnim);
+        apply_orbit();
+
+        camera.aspect = float(width) / float(height);
+        const auto& v = camera.view();
+        const auto& p = camera.project();
 
 #pragma region memory usage
         auto usage = host_usage();
